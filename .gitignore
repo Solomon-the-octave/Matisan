@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.env
+server/src/data/db.json
+.DS_Store
