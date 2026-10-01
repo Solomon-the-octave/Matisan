@@ -31,7 +31,7 @@ export default function Login() {
     <div className="flex min-h-screen items-center justify-center bg-slate-100 p-4 sm:p-8">
     <div className="flex w-full max-w-7xl overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-slate-200/70 lg:min-h-[680px]">
       {/* Left brand panel */}
-      <div className="relative hidden w-1/2 flex-col justify-between overflow-hidden bg-slate-50 p-8 lg:flex">
+      <div className="relative hidden w-1/2 flex-col justify-between overflow-hidden bg-slate-50 p-6 lg:flex">
         {/* blueprint grid texture */}
         <div
           className="absolute inset-0 opacity-[0.35]"
@@ -64,15 +64,15 @@ export default function Login() {
           <p className="mt-4 max-w-sm text-slate-500">
             Empowering your workforce with modern HR solutions built for engineering excellence.
           </p>
-          <div className="mt-8 flex flex-wrap justify-center gap-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3.5 py-2 text-sm font-medium text-slate-600 shadow-sm">
-              <Building2 size={15} className="text-brand-600" /> Project Management
+          <div className="mt-8 flex flex-wrap justify-center gap-1">
+            <span className="inline-flex items-center gap-0.5 whitespace-nowrap rounded-full bg-white px-2 py-1.5 text-xs font-medium text-slate-600 shadow-sm">
+              <Building2 size={11} className="text-brand-600" /> Project Management
             </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3.5 py-2 text-sm font-medium text-slate-600 shadow-sm">
-              <HardHat size={15} className="text-brand-600" /> Field Operations
+            <span className="inline-flex items-center gap-0.5 whitespace-nowrap rounded-full bg-white px-2 py-1.5 text-xs font-medium text-slate-600 shadow-sm">
+              <HardHat size={11} className="text-brand-600" /> Field Operations
             </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3.5 py-2 text-sm font-medium text-slate-600 shadow-sm">
-              <Ruler size={15} className="text-brand-600" /> Resource Planning
+            <span className="inline-flex items-center gap-0.5 whitespace-nowrap rounded-full bg-white px-2 py-1.5 text-xs font-medium text-slate-600 shadow-sm">
+              <Ruler size={11} className="text-brand-600" /> Resource Planning
             </span>
           </div>
         </div>

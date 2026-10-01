@@ -19,6 +19,11 @@ const defaultData = {
   workers: [],
   // One row per worker per day marked present on a project.
   workerAttendance: [],
+  // One row per project per week — the digital equivalent of the paper
+  // attendance/payroll sheet's sign-off chain: Submitted (supervisor) ->
+  // Finance-checked -> Approved (admin). Once approved, the attendance
+  // records in that window are locked from further edits.
+  payrollPeriods: [],
 };
 
 const db = new Low(new JSONFile(file), defaultData);
@@ -34,6 +39,17 @@ export async function initDb() {
   // disk from an earlier version of the app, so an upgrade never crashes.
   db.data.workers ??= [];
   db.data.workerAttendance ??= [];
+  db.data.payrollPeriods ??= [];
+  for (const p of db.data.projects) {
+    p.assignedEmployees ??= [];
+  }
+  // Older records predate AM/PM/OT tracking — treat them as a full day
+  // already marked present, so existing history doesn't silently drop to 0.
+  for (const r of db.data.workerAttendance) {
+    if (r.am === undefined) r.am = true;
+    if (r.pm === undefined) r.pm = true;
+    if (r.otHours === undefined) r.otHours = 0;
+  }
 
   if (db.data.departments.length === 0) {
     db.data.departments = [
@@ -73,6 +89,18 @@ export async function initDb() {
         createdAt: now,
       },
       {
+        id: 'u-supervisor-field',
+        name: 'Sara Bekele',
+        email: 'sara@matisans.com',
+        passwordHash: hash('Admin@123'),
+        role: 'supervisor',
+        department: 'dept-field',
+        title: 'Field Operations Supervisor',
+        phone: '+251 900 000 006',
+        isGlobalAdmin: false,
+        createdAt: now,
+      },
+      {
         id: 'u-employee',
         name: 'Jane Employee',
         email: 'employee@matisans.com',
@@ -101,9 +129,9 @@ export async function initDb() {
         name: 'Frank Finance',
         email: 'finance@matisans.com',
         passwordHash: hash('Admin@123'),
-        role: 'employee',
+        role: 'finance',
         department: 'dept-finance',
-        title: 'Procurement Officer',
+        title: 'Finance Officer',
         phone: '+251 900 000 005',
         isGlobalAdmin: false,
         createdAt: now,
@@ -123,17 +151,21 @@ export async function initDb() {
         progress: 42,
         startDate: '2026-06-01',
         description: 'Ground plus four storey hotel building construction supervision.',
+        // User IDs of employees the supervisor has assigned to this site.
+        // An employee only sees/marks attendance for a project they're in.
+        assignedEmployees: [],
       },
       {
         id: 'p-2',
         name: 'Road Access Upgrade - Batu',
         site: 'Batu',
         department: 'dept-field',
-        managerId: 'u-supervisor',
+        managerId: 'u-supervisor-field',
         status: 'active',
         progress: 18,
         startDate: '2026-08-10',
         description: 'Access road grading and drainage works for site logistics.',
+        assignedEmployees: ['u-employee'],
       },
     ];
   }
@@ -178,6 +210,7 @@ export async function initDb() {
         phone: '+251 911 111 111',
         photo: null,
         dailyRate: 350,
+        bankAccount: '1000689345868CBE',
         department: 'dept-eng',
         projectId: 'p-1',
         registeredBy: 'u-supervisor',
@@ -186,10 +219,11 @@ export async function initDb() {
       {
         id: 'WKR-0002',
         name: 'Chaltu Girma',
-        trade: 'Laborer',
+        trade: 'Day Laborer',
         phone: '+251 922 222 222',
         photo: null,
         dailyRate: 250,
+        bankAccount: '1000064270226CBE',
         department: 'dept-field',
         projectId: 'p-2',
         registeredBy: 'u-employee',
@@ -207,6 +241,9 @@ export async function initDb() {
         projectId: 'p-1',
         department: 'dept-eng',
         date: today,
+        am: true,
+        pm: true,
+        otHours: 0,
         registeredBy: 'u-supervisor',
         registeredAt: new Date().toISOString(),
       },

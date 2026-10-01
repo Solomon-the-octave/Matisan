@@ -7,6 +7,7 @@ import Projects from './pages/Projects'
 import Tasks from './pages/Tasks'
 import Attendance from './pages/Attendance'
 import FieldAttendance from './pages/FieldAttendance'
+import PayrollReview from './pages/PayrollReview'
 import Reports from './pages/Reports'
 import Profile from './pages/Profile'
 import ProtectedRoute from './components/ProtectedRoute'
@@ -22,6 +23,7 @@ export default function App() {
       <Route path="/tasks" element={<ProtectedRoute><Tasks /></ProtectedRoute>} />
       <Route path="/attendance" element={<ProtectedRoute><Attendance /></ProtectedRoute>} />
       <Route path="/field-attendance" element={<ProtectedRoute><FieldAttendance /></ProtectedRoute>} />
+      <Route path="/payroll-review" element={<ProtectedRoute roles={['admin', 'supervisor', 'finance']}><PayrollReview /></ProtectedRoute>} />
       <Route path="/reports" element={<ProtectedRoute roles={['admin', 'supervisor']}><Reports /></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
       <Route path="/" element={<Navigate to="/dashboard" replace />} />

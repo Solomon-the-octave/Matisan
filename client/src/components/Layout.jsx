@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Building2, Users, FolderKanban, ListChecks,
-  CalendarCheck, FileBarChart, UserCircle, LogOut, Bell, Menu, X, HardHat,
+  CalendarCheck, FileBarChart, UserCircle, LogOut, Bell, Menu, X, HardHat, ClipboardCheck,
 } from 'lucide-react'
 import { useState } from 'react'
 import Logo from './Logo'
@@ -16,6 +16,7 @@ const NAV = {
     { to: '/tasks', label: 'Tasks', icon: ListChecks },
     { to: '/attendance', label: 'Attendance', icon: CalendarCheck },
     { to: '/field-attendance', label: 'Field Attendance', icon: HardHat },
+    { to: '/payroll-review', label: 'Payroll Review', icon: ClipboardCheck },
     { to: '/reports', label: 'Reports', icon: FileBarChart },
   ],
   supervisor: [
@@ -24,6 +25,7 @@ const NAV = {
     { to: '/tasks', label: 'Tasks', icon: ListChecks },
     { to: '/attendance', label: 'Attendance', icon: CalendarCheck },
     { to: '/field-attendance', label: 'Field Attendance', icon: HardHat },
+    { to: '/payroll-review', label: 'Payroll Review', icon: ClipboardCheck },
     { to: '/users', label: 'My Team', icon: Users },
     { to: '/reports', label: 'Reports', icon: FileBarChart },
   ],
@@ -34,9 +36,14 @@ const NAV = {
     { to: '/tasks', label: 'My Tasks', icon: ListChecks },
     { to: '/profile', label: 'Profile', icon: UserCircle },
   ],
+  finance: [
+    { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/payroll-review', label: 'Payroll Review', icon: ClipboardCheck },
+    { to: '/profile', label: 'Profile', icon: UserCircle },
+  ],
 }
 
-const ROLE_LABEL = { admin: 'System Administrator', supervisor: 'Supervisor', employee: 'Employee' }
+const ROLE_LABEL = { admin: 'System Administrator', supervisor: 'Supervisor', employee: 'Employee', finance: 'Finance' }
 
 export default function Layout({ children, title, subtitle }) {
   const { user, logout } = useAuth()

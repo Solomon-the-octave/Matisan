@@ -134,6 +134,7 @@ export default function Users() {
                 <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className="input">
                   <option value="employee">Employee</option>
                   <option value="supervisor">Supervisor</option>
+                  {user.isGlobalAdmin && <option value="finance">Finance</option>}
                   {user.isGlobalAdmin && <option value="admin">Admin</option>}
                 </select>
               </Field>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, X, MapPin } from 'lucide-react'
+import { Plus, X, MapPin, UserCog } from 'lucide-react'
 import Layout from '../components/Layout'
 import Badge from '../components/Badge'
 import api from '../api'
@@ -11,14 +11,24 @@ export default function Projects() {
   const { user } = useAuth()
   const [projects, setProjects] = useState([])
   const [departments, setDepartments] = useState([])
+  const [users, setUsers] = useState([])
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(emptyForm)
+  const [assignFor, setAssignFor] = useState(null) // project being edited in the assign panel
   const canManage = user.role === 'admin' || user.role === 'supervisor'
 
   async function load() {
-    const [p, d] = await Promise.all([api.get('/projects'), api.get('/departments')])
+    const calls = [api.get('/projects'), api.get('/departments')]
+    if (canManage) calls.push(api.get('/users'))
+    const [p, d, u] = await Promise.all(calls)
     setProjects(p.data.projects)
     setDepartments(d.data.departments)
+    if (u) setUsers(u.data.users)
+  }
+
+  async function setAssignment(project, userId, action) {
+    await api.put(`/projects/${project.id}/assignments`, { userId, action })
+    load()
   }
 
   useEffect(() => {
@@ -97,6 +107,40 @@ export default function Projects() {
                   onTouchEnd={(e) => updateProgress(p.id, e.target.value)}
                   className="flex-1"
                 />
+              </div>
+            )}
+
+            {canManage && (
+              <div className="mt-3 border-t border-slate-100 pt-3">
+                <button
+                  onClick={() => setAssignFor(assignFor === p.id ? null : p.id)}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-600 hover:text-brand-700"
+                >
+                  <UserCog size={13} /> Assigned team ({(p.assignedEmployees || []).length})
+                </button>
+                {assignFor === p.id && (
+                  <div className="mt-2 space-y-1.5">
+                    {users
+                      .filter((u) => u.role === 'employee' && u.department === p.department)
+                      .map((u) => {
+                        const assigned = (p.assignedEmployees || []).includes(u.id)
+                        return (
+                          <label key={u.id} className="flex items-center justify-between gap-2 rounded-md px-2 py-1 text-xs hover:bg-slate-50">
+                            <span className="text-slate-600">{u.name}</span>
+                            <input
+                              type="checkbox"
+                              checked={assigned}
+                              onChange={() => setAssignment(p, u.id, assigned ? 'remove' : 'add')}
+                              className="h-3.5 w-3.5"
+                            />
+                          </label>
+                        )
+                      })}
+                    {users.filter((u) => u.role === 'employee' && u.department === p.department).length === 0 && (
+                      <p className="px-2 py-1 text-xs text-slate-400">No employees in this department yet.</p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>

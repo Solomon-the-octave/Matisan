@@ -13,6 +13,7 @@ import attendanceRoutes from './routes/attendance.js';
 import reportRoutes from './routes/reports.js';
 import workerRoutes from './routes/workers.js';
 import workerAttendanceRoutes from './routes/workerAttendance.js';
+import payrollPeriodRoutes from './routes/payrollPeriods.js';
 
 dotenv.config();
 
@@ -35,6 +36,7 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/workers', workerRoutes);
 app.use('/api/worker-attendance', workerAttendanceRoutes);
+app.use('/api/payroll-periods', payrollPeriodRoutes);
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 // eslint-disable-next-line no-unused-vars

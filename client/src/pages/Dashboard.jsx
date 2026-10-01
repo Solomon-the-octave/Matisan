@@ -146,6 +146,23 @@ export default function Dashboard() {
     )
   }
 
+  if (user.role === 'finance') {
+    return (
+      <Layout title="Finance Dashboard" subtitle="Review submitted payroll periods and sign off on approved weeks.">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <StatCard label="Projects" value={summary.totalProjects} icon={FolderKanban} />
+          <StatCard label="Active Projects" value={summary.activeProjects} icon={CheckCircle2} />
+        </div>
+        <div className="mt-6 surface p-6 text-center shadow-sm">
+          <p className="mb-3 text-sm text-slate-500">Payroll periods submitted by supervisors are reviewed here.</p>
+          <button onClick={() => navigate('/payroll-review')} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
+            <ClipboardList size={15} /> Go to Payroll Review
+          </button>
+        </div>
+      </Layout>
+    )
+  }
+
   // employee
   return (
     <Layout title="My Dashboard" subtitle="Track your tasks and attendance.">
