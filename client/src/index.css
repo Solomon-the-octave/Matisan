@@ -1,5 +1,23 @@
 @import "tailwindcss";
 
+/* Dark mode is a manual toggle (ThemeContext adds/removes .dark on <html>),
+   not the OS media query — :where() keeps this at zero specificity so it
+   never fights a more specific utility. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  /* Login page's decorative blueprint-grid panel — swapped per theme so
+     the texture stays a subtle watermark instead of a pale smear on dark. */
+  --login-grid-line: #dbe3f5;
+  --login-grid-glow: #eef2ff;
+  --login-wave: #16305e;
+}
+.dark {
+  --login-grid-line: #233150;
+  --login-grid-glow: rgba(59, 91, 219, 0.14);
+  --login-wave: #3b5bdb;
+}
+
 @theme {
   --color-brand-50: #eef2ff;
   --color-brand-100: #e0e7ff;
@@ -22,6 +40,12 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   color: #1e293b;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.dark body {
+  background-color: #0b1220;
+  color: #e2e8f0;
 }
 
 h1, h2, h3, h4 {
@@ -38,7 +62,7 @@ h1, h2, h3, h4 {
   outline: none;
   background-color: white;
   color: #1e293b;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
 }
 .input::placeholder {
   color: #94a3b8;
@@ -53,12 +77,36 @@ h1, h2, h3, h4 {
   cursor: not-allowed;
 }
 
+.dark .input {
+  background-color: #111a2e;
+  border-color: #27334d;
+  color: #e2e8f0;
+}
+.dark .input::placeholder {
+  color: #64748b;
+}
+.dark .input:focus {
+  border-color: var(--color-brand-500);
+  box-shadow: 0 0 0 3px rgb(59 91 219 / 0.25);
+}
+.dark .input:disabled {
+  background-color: #0b1220;
+  color: #475569;
+}
+
 /* Corporate surface card */
 .surface {
   background-color: #ffffff;
   border: 1px solid #e5e9f2;
   border-radius: 0.85rem;
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.dark .surface {
+  background-color: #111a2e;
+  border-color: #233150;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 /* Scrollbar polish */
@@ -72,4 +120,29 @@ h1, h2, h3, h4 {
 }
 ::-webkit-scrollbar-track {
   background-color: transparent;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background-color: #334155;
+}
+
+/* Range slider (progress adjuster) — give it the same themed track the
+   rest of the form controls get instead of leaving raw browser chrome. */
+input[type='range'] {
+  accent-color: var(--color-brand-600);
+  height: 6px;
+  border-radius: 9999px;
+  background-color: #e2e8f0;
+}
+.dark input[type='range'] {
+  background-color: #27334d;
+}
+input[type='range']::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: transparent;
+}
+input[type='range']::-moz-range-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: transparent;
 }

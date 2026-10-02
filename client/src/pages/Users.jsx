@@ -59,7 +59,7 @@ export default function Users() {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           {deptFilter && (
-            <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
+            <span className="rounded-full bg-brand-50 dark:bg-brand-500/15 px-3 py-1 text-xs font-semibold text-brand-700 dark:text-brand-300">
               Filtered: {deptName(deptFilter)}
               <button className="ml-2" onClick={() => setParams({})}>
                 <X size={12} className="inline" />
@@ -77,7 +77,7 @@ export default function Users() {
 
       <div className="overflow-hidden surface shadow-sm">
         <table className="w-full text-left text-sm">
-          <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-400">
+          <thead className="bg-slate-50 dark:bg-slate-800 text-xs font-semibold uppercase text-slate-400">
             <tr>
               <th className="px-4 py-3">Name</th>
               <th className="px-4 py-3">Department</th>
@@ -86,11 +86,11 @@ export default function Users() {
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {visible.map((u) => (
               <tr key={u.id}>
                 <td className="px-4 py-3">
-                  <div className="font-semibold text-slate-700">{u.name}</div>
+                  <div className="font-semibold text-slate-700 dark:text-slate-200">{u.name}</div>
                   <div className="text-xs text-slate-400">{u.title}</div>
                 </td>
                 <td className="px-4 py-3 text-slate-500">{deptName(u.department)}</td>
@@ -101,7 +101,7 @@ export default function Users() {
                 </td>
                 <td className="px-4 py-3 text-right">
                   {user.role === 'admin' && u.id !== user.id && (
-                    <button onClick={() => remove(u.id)} className="text-slate-300 hover:text-rose-500">
+                    <button onClick={() => remove(u.id)} className="text-slate-300 dark:text-slate-600 hover:text-rose-500">
                       <Trash2 size={15} />
                     </button>
                   )}
@@ -158,7 +158,7 @@ export default function Users() {
             <Field label="Phone">
               <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="input" />
             </Field>
-            {error && <p className="text-sm font-medium text-rose-600">{error}</p>}
+            {error && <p className="text-sm font-medium text-rose-600 dark:text-rose-400">{error}</p>}
             <button type="submit" className="w-full rounded-lg bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
               Create User
             </button>
@@ -181,10 +181,10 @@ function Field({ label, children }) {
 function Modal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-5 shadow-xl">
+      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-white dark:bg-slate-900 p-5 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-base font-bold text-slate-800">{title}</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
+          <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">{title}</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"><X size={18} /></button>
         </div>
         {children}
       </div>

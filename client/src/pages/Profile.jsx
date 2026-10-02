@@ -28,7 +28,7 @@ export default function Profile() {
     <Layout title="Profile" subtitle="Your account details">
       <div className="grid gap-4 md:grid-cols-2">
         <div className="surface p-5 shadow-sm">
-          <h3 className="mb-4 text-sm font-bold text-slate-700">Account Details</h3>
+          <h3 className="mb-4 text-sm font-bold text-slate-700 dark:text-slate-200">Account Details</h3>
           <dl className="space-y-3 text-sm">
             <Row label="Name" value={user.name} />
             <Row label="Email" value={user.email} />
@@ -39,12 +39,12 @@ export default function Profile() {
         </div>
 
         <div className="surface p-5 shadow-sm">
-          <h3 className="mb-4 text-sm font-bold text-slate-700">Change Password</h3>
+          <h3 className="mb-4 text-sm font-bold text-slate-700 dark:text-slate-200">Change Password</h3>
           <form onSubmit={submit} className="space-y-3">
             <input type="password" required placeholder="Current password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} className="input" />
             <input type="password" required placeholder="New password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="input" />
-            {error && <p className="text-sm font-medium text-rose-600">{error}</p>}
-            {message && <p className="text-sm font-medium text-emerald-600">{message}</p>}
+            {error && <p className="text-sm font-medium text-rose-600 dark:text-rose-400">{error}</p>}
+            {message && <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">{message}</p>}
             <button type="submit" className="w-full rounded-lg bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">Update Password</button>
           </form>
         </div>
@@ -55,9 +55,9 @@ export default function Profile() {
 
 function Row({ label, value }) {
   return (
-    <div className="flex justify-between border-b border-slate-50 pb-2">
+    <div className="flex justify-between border-b border-slate-50 dark:border-slate-800 pb-2">
       <dt className="text-slate-400">{label}</dt>
-      <dd className="font-medium capitalize text-slate-700">{value}</dd>
+      <dd className="font-medium capitalize text-slate-700 dark:text-slate-200">{value}</dd>
     </div>
   )
 }

@@ -17,6 +17,18 @@
       rel="stylesheet"
     />
     <title>Matisan HR &mdash; Human Resources Management System</title>
+    <script>
+      // Applied before paint so switching pages / reloading never flashes
+      // the wrong theme. Kept tiny and inline on purpose.
+      (function () {
+        try {
+          var stored = localStorage.getItem('matisan-theme');
+          var dark = stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if (dark) document.documentElement.classList.add('dark');
+          document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

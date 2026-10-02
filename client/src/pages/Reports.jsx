@@ -34,7 +34,7 @@ export default function Reports() {
   return (
     <Layout title="Reports" subtitle="Company-wide analytics and exports">
       <div className="mb-6 flex justify-end">
-        <button onClick={download} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">
+        <button onClick={download} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
           <Download size={15} /> Download CSV Report
         </button>
       </div>
@@ -47,12 +47,12 @@ export default function Reports() {
       </div>
 
       <div className="mt-6 surface p-5 shadow-sm">
-        <h3 className="mb-4 text-sm font-bold text-slate-700">Tasks by Status</h3>
+        <h3 className="mb-4 text-sm font-bold text-slate-700 dark:text-slate-200">Tasks by Status</h3>
         <div className="space-y-3">
           {statuses.map((s, i) => (
             <div key={s} className="flex items-center gap-3">
               <span className="w-24 shrink-0 text-xs font-medium capitalize text-slate-500">{s.replace('_', ' ')}</span>
-              <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-100">
+              <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
                 <div className="h-full rounded-full bg-brand-600" style={{ width: `${(counts[i] / max) * 100}%` }} />
               </div>
               <span className="w-6 text-right text-xs font-semibold text-slate-500">{counts[i]}</span>

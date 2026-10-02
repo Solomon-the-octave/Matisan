@@ -74,7 +74,7 @@ export default function Projects() {
           <div key={p.id} className="surface p-5 shadow-sm">
             <div className="flex items-start justify-between">
               <div>
-                <h3 className="text-sm font-bold text-slate-800">{p.name}</h3>
+                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100">{p.name}</h3>
                 <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate-400">
                   <MapPin size={12} /> {p.site || 'No site set'} · {deptName(p.department)}
                 </p>
@@ -86,7 +86,7 @@ export default function Projects() {
               <div className="mb-1 flex justify-between text-xs font-medium text-slate-400">
                 <span>Progress</span><span>{p.progress}%</span>
               </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
                 <div className="h-full rounded-full bg-brand-600" style={{ width: `${p.progress}%` }} />
               </div>
             </div>
@@ -111,10 +111,10 @@ export default function Projects() {
             )}
 
             {canManage && (
-              <div className="mt-3 border-t border-slate-100 pt-3">
+              <div className="mt-3 border-t border-slate-100 dark:border-slate-800 pt-3">
                 <button
                   onClick={() => setAssignFor(assignFor === p.id ? null : p.id)}
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-600 hover:text-brand-700"
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-600 dark:text-brand-400 hover:text-brand-700"
                 >
                   <UserCog size={13} /> Assigned team ({(p.assignedEmployees || []).length})
                 </button>
@@ -125,8 +125,8 @@ export default function Projects() {
                       .map((u) => {
                         const assigned = (p.assignedEmployees || []).includes(u.id)
                         return (
-                          <label key={u.id} className="flex items-center justify-between gap-2 rounded-md px-2 py-1 text-xs hover:bg-slate-50">
-                            <span className="text-slate-600">{u.name}</span>
+                          <label key={u.id} className="flex items-center justify-between gap-2 rounded-md px-2 py-1 text-xs hover:bg-slate-50 dark:hover:bg-slate-800">
+                            <span className="text-slate-600 dark:text-slate-300">{u.name}</span>
                             <input
                               type="checkbox"
                               checked={assigned}
@@ -150,10 +150,10 @@ export default function Projects() {
 
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl">
+          <div className="w-full max-w-md rounded-xl bg-white dark:bg-slate-900 p-5 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-base font-bold text-slate-800">New Project</h3>
-              <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
+              <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">New Project</h3>
+              <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"><X size={18} /></button>
             </div>
             <form onSubmit={submit} className="space-y-3">
               <input required placeholder="Project name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="input" />

@@ -62,7 +62,7 @@ export default function Attendance() {
     <Layout title="Attendance" subtitle="Clock in and out, and review field attendance">
       <div className="mb-6 flex flex-col items-start justify-between gap-4 surface p-5 shadow-sm sm:flex-row sm:items-center">
         <div>
-          <p className="text-sm font-bold text-slate-700">Today's status</p>
+          <p className="text-sm font-bold text-slate-700 dark:text-slate-200">Today's status</p>
           <p className="text-xs text-slate-400">
             {mine ? (mine.checkOut ? `Checked out at ${new Date(mine.checkOut).toLocaleTimeString()}` : `Checked in at ${new Date(mine.checkIn).toLocaleTimeString()}`) : 'Not checked in yet'}
           </p>
@@ -73,12 +73,12 @@ export default function Attendance() {
           </button>
         )}
         {mine && !mine.checkOut && (
-          <button onClick={checkOut} disabled={busy} className="inline-flex items-center gap-2 rounded-lg bg-slate-800 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-900 disabled:opacity-60">
+          <button onClick={checkOut} disabled={busy} className="inline-flex items-center gap-2 rounded-lg bg-slate-800 dark:bg-slate-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-900 dark:hover:bg-slate-500 disabled:opacity-60">
             <Clock size={15} /> Check Out
           </button>
         )}
         {mine && mine.checkOut && (
-          <span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600">
+          <span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
             <CheckCircle2 size={16} /> Complete ({mine.hours}h)
           </span>
         )}
@@ -86,7 +86,7 @@ export default function Attendance() {
 
       <div className="overflow-hidden surface shadow-sm">
         <table className="w-full text-left text-sm">
-          <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-400">
+          <thead className="bg-slate-50 dark:bg-slate-800 text-xs font-semibold uppercase text-slate-400">
             <tr>
               {canApprove && <th className="px-4 py-3">Employee</th>}
               <th className="px-4 py-3">Date</th>
@@ -97,10 +97,10 @@ export default function Attendance() {
               {canApprove && <th className="px-4 py-3"></th>}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100">
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {records.map((r) => (
               <tr key={r.id}>
-                {canApprove && <td className="px-4 py-3 font-medium text-slate-700">{userName(r.userId)}</td>}
+                {canApprove && <td className="px-4 py-3 font-medium text-slate-700 dark:text-slate-200">{userName(r.userId)}</td>}
                 <td className="px-4 py-3 text-slate-500">{r.date}</td>
                 <td className="px-4 py-3 text-slate-500">{new Date(r.checkIn).toLocaleTimeString()}</td>
                 <td className="px-4 py-3 text-slate-500">{r.checkOut ? new Date(r.checkOut).toLocaleTimeString() : '-'}</td>
@@ -109,7 +109,7 @@ export default function Attendance() {
                 {canApprove && (
                   <td className="px-4 py-3 text-right">
                     {r.status === 'pending' && (
-                      <button onClick={() => approve(r.id)} className="text-xs font-semibold text-brand-600 hover:underline">Approve</button>
+                      <button onClick={() => approve(r.id)} className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline">Approve</button>
                     )}
                   </td>
                 )}

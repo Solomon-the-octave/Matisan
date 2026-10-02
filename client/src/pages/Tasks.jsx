@@ -76,7 +76,7 @@ export default function Tasks() {
           <div key={t.id} className="flex flex-col justify-between gap-3 surface p-4 shadow-sm sm:flex-row sm:items-center">
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h4 className="text-sm font-bold text-slate-800">{t.title}</h4>
+                <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100">{t.title}</h4>
                 <Badge value={t.priority} />
               </div>
               <p className="mt-0.5 truncate text-xs text-slate-400">
@@ -88,7 +88,7 @@ export default function Tasks() {
               <Badge value={t.status} />
               {STATUS_FLOW.indexOf(t.status) < STATUS_FLOW.length - 1 &&
                 (t.assignedTo === user.id || canManage) && (
-                  <button onClick={() => advance(t)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">
+                  <button onClick={() => advance(t)} className="rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
                     {nextLabel(t.status)}
                   </button>
                 )}
@@ -100,10 +100,10 @@ export default function Tasks() {
 
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-5 shadow-xl">
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-white dark:bg-slate-900 p-5 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-base font-bold text-slate-800">New Task</h3>
-              <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
+              <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">New Task</h3>
+              <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"><X size={18} /></button>
             </div>
             <form onSubmit={submit} className="space-y-3">
               <input required placeholder="Task title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="input" />

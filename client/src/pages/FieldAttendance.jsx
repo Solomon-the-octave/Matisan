@@ -78,7 +78,7 @@ function Avatar({ worker, size = 40 }) {
       <img
         src={worker.photo}
         alt={worker.name}
-        className="shrink-0 rounded-full object-cover ring-1 ring-slate-200"
+        className="shrink-0 rounded-full object-cover ring-1 ring-slate-200 dark:ring-slate-700"
         style={{ width: size, height: size }}
       />
     )
@@ -91,7 +91,7 @@ function Avatar({ worker, size = 40 }) {
     .toUpperCase()
   return (
     <div
-      className="flex shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-500 ring-1 ring-slate-200"
+      className="flex shrink-0 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700 text-xs font-bold text-slate-500 ring-1 ring-slate-200 dark:ring-slate-700"
       style={{ width: size, height: size }}
     >
       {initials}
@@ -379,20 +379,20 @@ export default function FieldAttendance() {
   return (
     <Layout title="Field Attendance" subtitle="Register site workers and track who's on the ground today">
       {toast && (
-        <div className="mb-4 rounded-lg bg-brand-50 px-4 py-2.5 text-sm font-semibold text-brand-700 ring-1 ring-inset ring-brand-100">
+        <div className="mb-4 rounded-lg bg-brand-50 dark:bg-brand-500/15 px-4 py-2.5 text-sm font-semibold text-brand-700 dark:text-brand-300 ring-1 ring-inset ring-brand-100 dark:ring-brand-500/25">
           {toast}
         </div>
       )}
 
       {weekLocked && (
-        <div className="mb-4 flex items-center gap-2 rounded-lg bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-600 ring-1 ring-inset ring-slate-200">
+        <div className="mb-4 flex items-center gap-2 rounded-lg bg-slate-100 dark:bg-slate-700 px-4 py-2.5 text-sm font-semibold text-slate-600 dark:text-slate-300 ring-1 ring-inset ring-slate-200 dark:ring-slate-700">
           <Lock size={14} /> This week has been approved and is locked — attendance can't be changed. Ask an admin to reopen it if something needs fixing.
         </div>
       )}
 
       {projectsLoaded && projects.length === 0 ? (
         <div className="surface flex flex-col items-center justify-center py-16 text-center">
-          <Users className="mb-2 text-slate-300" size={28} />
+          <Users className="mb-2 text-slate-300 dark:text-slate-600" size={28} />
           <p className="text-sm font-medium text-slate-500">You're not assigned to a project yet</p>
           <p className="max-w-xs text-xs text-slate-400">Ask your supervisor to assign you to a site — it'll show up here as soon as they do.</p>
         </div>
@@ -405,11 +405,11 @@ export default function FieldAttendance() {
               <option key={p.id} value={p.id}>{p.name}{user.isGlobalAdmin ? ` — ${p.site}` : ''}</option>
             ))}
           </select>
-          <button onClick={() => { loadRoster(projectId); loadPayroll(projectId); loadWeekGrid(projectId) }} className="rounded-lg border border-slate-200 p-2.5 text-slate-500 hover:bg-slate-50">
+          <button onClick={() => { loadRoster(projectId); loadPayroll(projectId); loadWeekGrid(projectId) }} className="rounded-lg border border-slate-200 dark:border-slate-700 p-2.5 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800">
             <RefreshCw size={15} />
           </button>
         </div>
-        <div className="flex rounded-lg border border-slate-200 p-1 text-sm font-semibold">
+        <div className="flex rounded-lg border border-slate-200 dark:border-slate-700 p-1 text-sm font-semibold">
           <button
             onClick={() => setTab('roster')}
             className={`rounded-md px-3 py-1.5 ${tab === 'roster' ? 'bg-brand-600 text-white' : 'text-slate-500'}`}
@@ -435,7 +435,7 @@ export default function FieldAttendance() {
         <>
           <div className="mb-4 flex items-center justify-between">
             <p className="text-sm text-slate-500">
-              <span className="font-semibold text-slate-700">{roster.length}</span> worker{roster.length === 1 ? '' : 's'} registered today
+              <span className="font-semibold text-slate-700 dark:text-slate-200">{roster.length}</span> worker{roster.length === 1 ? '' : 's'} registered today
               {currentProject ? ` on ${currentProject.name}` : ''}
             </p>
             <button
@@ -456,8 +456,8 @@ export default function FieldAttendance() {
                   <Avatar worker={w} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-slate-800">{w.name}</span>
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">{w.id}</span>
+                      <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{w.name}</span>
+                      <span className="rounded-full bg-slate-100 dark:bg-slate-700 px-2 py-0.5 text-[10px] font-bold text-slate-500">{w.id}</span>
                     </div>
                     <p className="text-xs text-slate-400">{w.trade || 'Worker'}{w.phone ? ` · ${w.phone}` : ''}{w.bankAccount ? ` · Acct ${w.bankAccount}` : ''}</p>
                   </div>
@@ -465,7 +465,7 @@ export default function FieldAttendance() {
                   <button
                     onClick={() => openEditWorker(w)}
                     title="Edit worker details"
-                    className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                    className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:text-slate-300"
                   >
                     <Pencil size={14} />
                   </button>
@@ -475,7 +475,7 @@ export default function FieldAttendance() {
                     <button
                       onClick={() => updateAttendance(r.id, { am: !r.am })}
                       disabled={weekLocked}
-                      className={`rounded-md px-2.5 py-1 text-xs font-bold disabled:opacity-60 ${r.am ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}
+                      className={`rounded-md px-2.5 py-1 text-xs font-bold disabled:opacity-60 ${r.am ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'}`}
                       title="Morning"
                     >
                       AM
@@ -483,7 +483,7 @@ export default function FieldAttendance() {
                     <button
                       onClick={() => updateAttendance(r.id, { pm: !r.pm })}
                       disabled={weekLocked}
-                      className={`rounded-md px-2.5 py-1 text-xs font-bold disabled:opacity-60 ${r.pm ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400'}`}
+                      className={`rounded-md px-2.5 py-1 text-xs font-bold disabled:opacity-60 ${r.pm ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'}`}
                       title="Afternoon"
                     >
                       PM
@@ -500,7 +500,7 @@ export default function FieldAttendance() {
                       disabled={weekLocked}
                       value={r.otHours || 0}
                       onChange={(e) => updateAttendance(r.id, { otHours: e.target.value })}
-                      className="w-14 rounded-md border border-slate-200 px-1.5 py-1 text-xs disabled:opacity-60"
+                      className="w-14 rounded-md border border-slate-200 dark:border-slate-700 px-1.5 py-1 text-xs disabled:opacity-60"
                     />
                     <span className="text-xs text-slate-400">hrs</span>
                   </div>
@@ -513,7 +513,7 @@ export default function FieldAttendance() {
             })}
             {roster.length === 0 && (
               <div className="surface flex flex-col items-center justify-center py-14 text-center">
-                <Users className="mb-2 text-slate-300" size={28} />
+                <Users className="mb-2 text-slate-300 dark:text-slate-600" size={28} />
                 <p className="text-sm font-medium text-slate-500">No one registered yet today</p>
                 <p className="text-xs text-slate-400">Tap "Register Worker" to add the first one.</p>
               </div>
@@ -534,32 +534,32 @@ export default function FieldAttendance() {
                 `weekly-sheet-${projectId}-${weekStart}-to-${weekEnd}.csv`
               )}
               disabled={!projectId}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
             >
               <Download size={13} /> Download Weekly Sheet (CSV)
             </button>
           </div>
           <div className="overflow-x-auto surface">
             <table className="w-full border-collapse text-center text-xs">
-              <thead className="bg-slate-50 text-slate-500">
+              <thead className="bg-slate-50 dark:bg-slate-800 text-slate-500">
                 <tr>
-                  <th rowSpan={2} className="sticky left-0 z-10 border-b border-r border-slate-200 bg-slate-50 px-3 py-2 text-left">No.</th>
-                  <th rowSpan={2} className="sticky left-8 z-10 border-b border-r border-slate-200 bg-slate-50 px-3 py-2 text-left">Name</th>
-                  <th rowSpan={2} className="border-b border-r border-slate-200 px-3 py-2 text-left">Job Title</th>
+                  <th rowSpan={2} className="sticky left-0 z-10 border-b border-r border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-left">No.</th>
+                  <th rowSpan={2} className="sticky left-8 z-10 border-b border-r border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-left">Name</th>
+                  <th rowSpan={2} className="border-b border-r border-slate-200 dark:border-slate-700 px-3 py-2 text-left">Job Title</th>
                   {weekDates.map((d) => (
-                    <th key={d} colSpan={3} className="border-b border-r border-slate-200 px-2 py-1.5 font-semibold">
+                    <th key={d} colSpan={3} className="border-b border-r border-slate-200 dark:border-slate-700 px-2 py-1.5 font-semibold">
                       {new Date(d + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' })}
                     </th>
                   ))}
-                  <th rowSpan={2} className="border-b border-r border-slate-200 px-3 py-2">Total<br />Days</th>
-                  <th rowSpan={2} className="border-b border-slate-200 px-3 py-2">Total<br />OT</th>
+                  <th rowSpan={2} className="border-b border-r border-slate-200 dark:border-slate-700 px-3 py-2">Total<br />Days</th>
+                  <th rowSpan={2} className="border-b border-slate-200 dark:border-slate-700 px-3 py-2">Total<br />OT</th>
                 </tr>
                 <tr>
                   {weekDates.map((d) => (
                     <Fragment key={d}>
-                      <th className="border-b border-r border-slate-100 px-1.5 py-1 font-medium">M</th>
-                      <th className="border-b border-r border-slate-100 px-1.5 py-1 font-medium">A</th>
-                      <th className="border-b border-r border-slate-200 px-1.5 py-1 font-medium">OT</th>
+                      <th className="border-b border-r border-slate-100 dark:border-slate-800 px-1.5 py-1 font-medium">M</th>
+                      <th className="border-b border-r border-slate-100 dark:border-slate-800 px-1.5 py-1 font-medium">A</th>
+                      <th className="border-b border-r border-slate-200 dark:border-slate-700 px-1.5 py-1 font-medium">OT</th>
                     </Fragment>
                   ))}
                 </tr>
@@ -578,47 +578,47 @@ export default function FieldAttendance() {
                     { days: 0, ot: 0 }
                   )
                   return (
-                    <tr key={w.id} className="odd:bg-white even:bg-slate-50/50">
-                      <td className="sticky left-0 z-10 border-r border-slate-200 bg-inherit px-3 py-2 text-left text-slate-400">{idx + 1}</td>
-                      <td className="sticky left-8 z-10 border-r border-slate-200 bg-inherit px-3 py-2 text-left">
+                    <tr key={w.id} className="odd:bg-white even:bg-slate-50/50 dark:odd:bg-slate-900 dark:even:bg-slate-800/50">
+                      <td className="sticky left-0 z-10 border-r border-slate-200 dark:border-slate-700 bg-inherit px-3 py-2 text-left text-slate-400">{idx + 1}</td>
+                      <td className="sticky left-8 z-10 border-r border-slate-200 dark:border-slate-700 bg-inherit px-3 py-2 text-left">
                         <div className="flex items-center gap-1.5">
                           <div>
-                            <div className="font-semibold text-slate-700">{w.name}</div>
+                            <div className="font-semibold text-slate-700 dark:text-slate-200">{w.name}</div>
                             <div className="text-[10px] text-slate-400">{w.id}</div>
                           </div>
                           <button
                             onClick={() => openEditWorker(w)}
                             title="Edit worker details"
-                            className="shrink-0 rounded p-1 text-slate-300 hover:bg-slate-100 hover:text-slate-600"
+                            className="shrink-0 rounded p-1 text-slate-300 dark:text-slate-600 hover:bg-slate-100 hover:text-slate-600 dark:hover:text-slate-300"
                           >
                             <Pencil size={12} />
                           </button>
                         </div>
                       </td>
-                      <td className="border-r border-slate-200 px-3 py-2 text-left text-slate-500">{w.trade || '-'}</td>
+                      <td className="border-r border-slate-200 dark:border-slate-700 px-3 py-2 text-left text-slate-500">{w.trade || '-'}</td>
                       {weekDates.map((d) => {
                         const r = days[d]
                         return (
                           <Fragment key={d}>
-                            <td className="border-r border-slate-100 p-1">
+                            <td className="border-r border-slate-100 dark:border-slate-800 p-1">
                               <button
                                 disabled={weekLocked}
                                 onClick={() => gridCellAction(w.id, d, { am: !(r?.am) })}
-                                className={`h-6 w-6 rounded font-bold disabled:opacity-60 ${r?.am ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-50 text-slate-300 hover:bg-slate-100'}`}
+                                className={`h-6 w-6 rounded font-bold disabled:opacity-60 ${r?.am ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' : 'bg-slate-50 dark:bg-slate-800 text-slate-300 dark:text-slate-600 hover:bg-slate-100'}`}
                               >
                                 {r?.am ? 'P' : ''}
                               </button>
                             </td>
-                            <td className="border-r border-slate-100 p-1">
+                            <td className="border-r border-slate-100 dark:border-slate-800 p-1">
                               <button
                                 disabled={weekLocked}
                                 onClick={() => gridCellAction(w.id, d, { pm: !(r?.pm) })}
-                                className={`h-6 w-6 rounded font-bold disabled:opacity-60 ${r?.pm ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-50 text-slate-300 hover:bg-slate-100'}`}
+                                className={`h-6 w-6 rounded font-bold disabled:opacity-60 ${r?.pm ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' : 'bg-slate-50 dark:bg-slate-800 text-slate-300 dark:text-slate-600 hover:bg-slate-100'}`}
                               >
                                 {r?.pm ? 'P' : ''}
                               </button>
                             </td>
-                            <td className="border-r border-slate-200 p-1">
+                            <td className="border-r border-slate-200 dark:border-slate-700 p-1">
                               <input
                                 type="number"
                                 min="0"
@@ -630,14 +630,14 @@ export default function FieldAttendance() {
                                   if (val !== '' && Number(val) !== (r?.otHours || 0)) gridCellAction(w.id, d, { otHours: val })
                                 }}
                                 placeholder="-"
-                                className="h-6 w-10 rounded border border-slate-200 text-center disabled:opacity-60"
+                                className="h-6 w-10 rounded border border-slate-200 dark:border-slate-700 text-center disabled:opacity-60"
                               />
                             </td>
                           </Fragment>
                         )
                       })}
-                      <td className="border-r border-slate-200 px-3 py-2 font-semibold text-slate-700">{totals.days}</td>
-                      <td className="px-3 py-2 font-semibold text-slate-700">{totals.ot}</td>
+                      <td className="border-r border-slate-200 dark:border-slate-700 px-3 py-2 font-semibold text-slate-700 dark:text-slate-200">{totals.days}</td>
+                      <td className="px-3 py-2 font-semibold text-slate-700 dark:text-slate-200">{totals.ot}</td>
                     </tr>
                   )
                 })}
@@ -660,7 +660,7 @@ export default function FieldAttendance() {
             <button
               onClick={() => downloadCsv({ projectId, type: 'payroll' }, `payroll-${projectId}.csv`)}
               disabled={!projectId}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
             >
               <Download size={13} /> Download Payroll Report (CSV)
             </button>
@@ -668,19 +668,19 @@ export default function FieldAttendance() {
           <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div className="surface p-4">
               <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Workers</div>
-              <div className="mt-1 text-2xl font-bold text-slate-800">{payroll.totals.workers}</div>
+              <div className="mt-1 text-2xl font-bold text-slate-800 dark:text-slate-100">{payroll.totals.workers}</div>
             </div>
             <div className="surface p-4">
               <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Worker-days</div>
-              <div className="mt-1 text-2xl font-bold text-slate-800">{payroll.totals.daysPresent}</div>
+              <div className="mt-1 text-2xl font-bold text-slate-800 dark:text-slate-100">{payroll.totals.daysPresent}</div>
             </div>
             <div className="surface p-4">
               <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">OT hours</div>
-              <div className="mt-1 text-2xl font-bold text-slate-800">{payroll.totals.otHours}</div>
+              <div className="mt-1 text-2xl font-bold text-slate-800 dark:text-slate-100">{payroll.totals.otHours}</div>
             </div>
             <div className="surface p-4">
               <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Estimated cost</div>
-              <div className="mt-1 text-2xl font-bold text-slate-800">{payroll.totals.cost.toLocaleString()}</div>
+              <div className="mt-1 text-2xl font-bold text-slate-800 dark:text-slate-100">{payroll.totals.cost.toLocaleString()}</div>
             </div>
           </div>
 
@@ -696,7 +696,7 @@ export default function FieldAttendance() {
                       <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{type} labor</div>
                       <div className="text-xs text-slate-400">{b.workers} worker{b.workers === 1 ? '' : 's'} · {b.daysPresent} days · {b.otHours} OT hrs</div>
                     </div>
-                    <div className="text-xl font-bold text-slate-800">{b.cost.toLocaleString()}</div>
+                    <div className="text-xl font-bold text-slate-800 dark:text-slate-100">{b.cost.toLocaleString()}</div>
                   </div>
                 )
               })}
@@ -705,7 +705,7 @@ export default function FieldAttendance() {
 
           <div className="overflow-hidden surface">
             <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-400">
+              <thead className="bg-slate-50 dark:bg-slate-800 text-xs font-semibold uppercase text-slate-400">
                 <tr>
                   <th className="px-4 py-3">Worker</th>
                   <th className="px-4 py-3">Trade</th>
@@ -717,23 +717,23 @@ export default function FieldAttendance() {
                   <th className="px-4 py-3">Account</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                 {payroll.payroll.map((p) => (
                   <tr key={p.workerId}>
                     <td className="px-4 py-3">
-                      <div className="font-semibold text-slate-700">{p.name}</div>
+                      <div className="font-semibold text-slate-700 dark:text-slate-200">{p.name}</div>
                       <div className="text-xs text-slate-400">{p.workerId}</div>
                     </td>
                     <td className="px-4 py-3 text-slate-500">{p.trade || '-'}</td>
                     <td className="px-4 py-3">
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${p.laborType === 'Skilled' ? 'bg-brand-50 text-brand-700' : 'bg-slate-100 text-slate-500'}`}>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${p.laborType === 'Skilled' ? 'bg-brand-50 dark:bg-brand-500/15 text-brand-700 dark:text-brand-300' : 'bg-slate-100 dark:bg-slate-700 text-slate-500'}`}>
                         {p.laborType}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-slate-500">{p.dailyRate ?? '-'}</td>
                     <td className="px-4 py-3 text-slate-500">{p.daysPresent}</td>
                     <td className="px-4 py-3 text-slate-500">{p.otHours || 0}</td>
-                    <td className="px-4 py-3 font-semibold text-slate-700">{p.total != null ? p.total.toLocaleString() : '-'}</td>
+                    <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-200">{p.total != null ? p.total.toLocaleString() : '-'}</td>
                     <td className="px-4 py-3 text-xs text-slate-400">{p.bankAccount || '-'}</td>
                   </tr>
                 ))}
@@ -750,13 +750,13 @@ export default function FieldAttendance() {
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-5 shadow-xl">
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-white dark:bg-slate-900 p-5 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-base font-bold text-slate-800">Register Worker</h3>
-              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
+              <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">Register Worker</h3>
+              <button onClick={() => setShowModal(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"><X size={18} /></button>
             </div>
 
-            <div className="mb-4 flex rounded-lg border border-slate-200 p-1 text-sm font-semibold">
+            <div className="mb-4 flex rounded-lg border border-slate-200 dark:border-slate-700 p-1 text-sm font-semibold">
               <button
                 onClick={() => setMode('returning')}
                 className={`flex-1 rounded-md py-1.5 ${mode === 'returning' ? 'bg-brand-600 text-white' : 'text-slate-500'}`}
@@ -771,7 +771,7 @@ export default function FieldAttendance() {
               </button>
             </div>
 
-            {error && <p className="mb-3 text-sm font-medium text-rose-600">{error}</p>}
+            {error && <p className="mb-3 text-sm font-medium text-rose-600 dark:text-rose-400">{error}</p>}
 
             {mode === 'returning' ? (
               <div>
@@ -791,11 +791,11 @@ export default function FieldAttendance() {
                       key={w.id}
                       disabled={busy}
                       onClick={() => registerExisting(w.id)}
-                      className="flex w-full items-center gap-3 rounded-lg border border-slate-100 p-2.5 text-left hover:border-brand-200 hover:bg-brand-50 disabled:opacity-50"
+                      className="flex w-full items-center gap-3 rounded-lg border border-slate-100 dark:border-slate-800 p-2.5 text-left hover:border-brand-200 hover:bg-brand-50 disabled:opacity-50"
                     >
                       <Avatar worker={w} size={32} />
                       <div className="min-w-0 flex-1">
-                        <div className="text-sm font-semibold text-slate-700">{w.name}</div>
+                        <div className="text-sm font-semibold text-slate-700 dark:text-slate-200">{w.name}</div>
                         <div className="text-xs text-slate-400">{w.id} · {w.trade || 'Worker'}</div>
                       </div>
                     </button>
@@ -807,11 +807,11 @@ export default function FieldAttendance() {
               </div>
             ) : (
               <form onSubmit={submitNewWorker} className="space-y-3">
-                <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-slate-300 p-3 text-sm text-slate-500 hover:border-brand-300">
+                <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 p-3 text-sm text-slate-500 hover:border-brand-300">
                   {newWorker.photo ? (
                     <img src={newWorker.photo} alt="" className="h-12 w-12 rounded-full object-cover" />
                   ) : (
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700">
                       <Camera size={18} className="text-slate-400" />
                     </div>
                   )}
@@ -843,23 +843,23 @@ export default function FieldAttendance() {
 
       {editingWorker && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-5 shadow-xl">
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-xl bg-white dark:bg-slate-900 p-5 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <div>
-                <h3 className="text-base font-bold text-slate-800">Edit Worker</h3>
+                <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">Edit Worker</h3>
                 <p className="text-xs text-slate-400">{editingWorker.id}</p>
               </div>
-              <button onClick={() => setEditingWorker(null)} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
+              <button onClick={() => setEditingWorker(null)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"><X size={18} /></button>
             </div>
 
-            {editError && <p className="mb-3 text-sm font-medium text-rose-600">{editError}</p>}
+            {editError && <p className="mb-3 text-sm font-medium text-rose-600 dark:text-rose-400">{editError}</p>}
 
             <form onSubmit={submitEditWorker} className="space-y-3">
-              <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-slate-300 p-3 text-sm text-slate-500 hover:border-brand-300">
+              <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-slate-300 dark:border-slate-600 p-3 text-sm text-slate-500 hover:border-brand-300">
                 {editForm.photo ? (
                   <img src={editForm.photo} alt="" className="h-12 w-12 rounded-full object-cover" />
                 ) : (
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700">
                     <Camera size={18} className="text-slate-400" />
                   </div>
                 )}

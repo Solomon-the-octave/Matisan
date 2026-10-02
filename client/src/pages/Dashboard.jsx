@@ -103,7 +103,7 @@ export default function Dashboard() {
     return (
       <Layout title="Welcome back, System!" subtitle="Here's what's happening across Matisan today">
         <div className="mb-6 flex justify-end gap-2">
-          <button onClick={downloadReport} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">
+          <button onClick={downloadReport} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
             <Download size={15} /> Download Report
           </button>
           <button onClick={() => navigate('/projects')} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
@@ -134,8 +134,8 @@ export default function Dashboard() {
             the paper payroll sheet. */}
         <div className="mt-6 surface p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-700">Awaiting Your Signature</h3>
-            <button onClick={() => navigate('/payroll-review')} className="text-xs font-semibold text-brand-600 hover:underline">Review all &rarr;</button>
+            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Awaiting Your Signature</h3>
+            <button onClick={() => navigate('/payroll-review')} className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline">Review all &rarr;</button>
           </div>
           {payrollPeriods.filter((pp) => pp.status === 'finance_checked').length === 0 ? (
             <div className="flex flex-col items-center justify-center py-8 text-center">
@@ -143,13 +143,13 @@ export default function Dashboard() {
               <p className="text-sm font-medium text-slate-500">Nothing waiting on your signature</p>
             </div>
           ) : (
-            <div className="divide-y divide-slate-100">
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
               {payrollPeriods
                 .filter((pp) => pp.status === 'finance_checked')
                 .map((pp) => (
                   <div key={pp.id} className="flex items-center justify-between gap-3 py-2.5">
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold text-slate-700">
+                      <div className="truncate text-sm font-semibold text-slate-700 dark:text-slate-200">
                         {projects.find((p) => p.id === pp.projectId)?.name || pp.projectId}
                       </div>
                       <div className="text-xs text-slate-400">{pp.weekStart} – {pp.weekEnd} · checked by Finance</div>
@@ -183,7 +183,7 @@ export default function Dashboard() {
         </div>
 
         <div className="mt-6 surface p-4 shadow-sm">
-          <h3 className="mb-3 text-sm font-bold text-slate-700">Quick Actions</h3>
+          <h3 className="mb-3 text-sm font-bold text-slate-700 dark:text-slate-200">Quick Actions</h3>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
             <QuickAction icon={Plus} label="New Project" onClick={() => navigate('/projects')} primary />
             <QuickAction icon={Users} label="Manage Users" onClick={() => navigate('/users')} />
@@ -205,7 +205,7 @@ export default function Dashboard() {
           <StatCard label="Pending Attendance" value={summary.pendingAttendance} icon={Clock} />
         </div>
         <div className="mt-6 surface p-4 shadow-sm">
-          <h3 className="mb-3 text-sm font-bold text-slate-700">Tasks Requiring Attention</h3>
+          <h3 className="mb-3 text-sm font-bold text-slate-700 dark:text-slate-200">Tasks Requiring Attention</h3>
           {attention.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 text-center">
               <CheckCircle2 className="mb-2 text-emerald-400" size={28} />
@@ -220,7 +220,7 @@ export default function Dashboard() {
         </div>
 
         <div className="mt-6 surface p-4 shadow-sm">
-          <h3 className="mb-3 text-sm font-bold text-slate-700">Quick Actions</h3>
+          <h3 className="mb-3 text-sm font-bold text-slate-700 dark:text-slate-200">Quick Actions</h3>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <QuickAction icon={HardHat} label="Field Attendance & Weekly Sheet" onClick={() => navigate('/field-attendance')} primary />
             <QuickAction icon={PenLine} label="Submit Week for Payroll" onClick={() => navigate('/payroll-review')} />
@@ -259,9 +259,9 @@ export default function Dashboard() {
 
       <div className="mt-6 surface p-4 shadow-sm">
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-slate-700">Attendance</h3>
+          <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Attendance</h3>
           {summary.checkedInToday ? (
-            <button onClick={handleCheckOut} disabled={busy} className="rounded-lg bg-slate-800 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-900 disabled:opacity-60">
+            <button onClick={handleCheckOut} disabled={busy} className="rounded-lg bg-slate-800 dark:bg-slate-600 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-900 dark:hover:bg-slate-500 disabled:opacity-60">
               Check Out
             </button>
           ) : summary.myAttendanceToday ? (
@@ -275,7 +275,7 @@ export default function Dashboard() {
       </div>
 
       <div className="mt-6 surface p-4 shadow-sm">
-        <h3 className="mb-3 text-sm font-bold text-slate-700">My Pending Tasks</h3>
+        <h3 className="mb-3 text-sm font-bold text-slate-700 dark:text-slate-200">My Pending Tasks</h3>
         {tasks.filter((t) => t.status !== 'completed').length === 0 && <Empty text="No pending tasks" />}
         {tasks
           .filter((t) => t.status !== 'completed')
@@ -285,7 +285,7 @@ export default function Dashboard() {
       </div>
 
       <div className="mt-6 surface p-4 shadow-sm">
-        <h3 className="mb-2 text-sm font-bold text-slate-700">On Site Today?</h3>
+        <h3 className="mb-2 text-sm font-bold text-slate-700 dark:text-slate-200">On Site Today?</h3>
         <p className="mb-3 text-xs text-slate-400">Register new workers and mark who's present — the same roll call your site used to do on paper.</p>
         <QuickAction icon={HardHat} label="Go to Field Attendance" onClick={() => navigate('/field-attendance')} primary />
       </div>
@@ -297,10 +297,10 @@ function Panel({ title, onSeeAll, children }) {
   return (
     <div className="surface p-4 shadow-sm">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-bold text-slate-700">{title}</h3>
-        <button onClick={onSeeAll} className="text-xs font-semibold text-brand-600 hover:underline">View All &rarr;</button>
+        <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">{title}</h3>
+        <button onClick={onSeeAll} className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline">View All &rarr;</button>
       </div>
-      <div className="divide-y divide-slate-100">{children}</div>
+      <div className="divide-y divide-slate-100 dark:divide-slate-800">{children}</div>
     </div>
   )
 }
@@ -309,7 +309,7 @@ function ListRow({ title, subtitle, right }) {
   return (
     <div className="flex items-center justify-between py-2.5">
       <div className="min-w-0 pr-3">
-        <div className="truncate text-sm font-semibold text-slate-700">{title}</div>
+        <div className="truncate text-sm font-semibold text-slate-700 dark:text-slate-200">{title}</div>
         {subtitle && <div className="truncate text-xs text-slate-400">{subtitle}</div>}
       </div>
       {right}
@@ -326,7 +326,7 @@ function QuickAction({ icon: Icon, label, onClick, primary }) {
     <button
       onClick={onClick}
       className={`flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-semibold transition ${
-        primary ? 'bg-brand-600 text-white hover:bg-brand-700' : 'border border-slate-200 text-slate-600 hover:bg-slate-50'
+        primary ? 'bg-brand-600 text-white hover:bg-brand-700' : 'border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
       }`}
     >
       <Icon size={16} /> {label}
