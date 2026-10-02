@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import { UserPlus, Search, Camera, X, Users, Wallet, RefreshCw, Lock, Pencil, Download } from 'lucide-react'
 import Layout from '../components/Layout'
+import ScrollHint from '../components/ScrollHint'
 import api from '../api'
 import { useAuth } from '../context/AuthContext'
 
@@ -398,7 +399,11 @@ export default function FieldAttendance() {
         </div>
       ) : (
       <>
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      {/* Stays stacked through tablet widths — side by side too early and the
+          project picker (which can carry a long site name) squeezes the tab
+          bar into a silent horizontal scroll. Goes side by side only once
+          there's real room for both on genuine desktop/laptop widths. */}
+      <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-2">
           <select value={projectId} onChange={(e) => setProjectId(e.target.value)} className="input !w-auto min-w-[220px]">
             {projects.map((p) => (
@@ -409,22 +414,22 @@ export default function FieldAttendance() {
             <RefreshCw size={15} />
           </button>
         </div>
-        <div className="flex rounded-lg border border-slate-200 dark:border-slate-700 p-1 text-sm font-semibold">
+        <div className="flex min-w-0 overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700 p-1 text-xs font-semibold sm:text-sm">
           <button
             onClick={() => setTab('roster')}
-            className={`rounded-md px-3 py-1.5 ${tab === 'roster' ? 'bg-brand-600 text-white' : 'text-slate-500'}`}
+            className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1.5 sm:px-3 ${tab === 'roster' ? 'bg-brand-600 text-white' : 'text-slate-500'}`}
           >
             Today's Roster
           </button>
           <button
             onClick={() => setTab('grid')}
-            className={`rounded-md px-3 py-1.5 ${tab === 'grid' ? 'bg-brand-600 text-white' : 'text-slate-500'}`}
+            className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1.5 sm:px-3 ${tab === 'grid' ? 'bg-brand-600 text-white' : 'text-slate-500'}`}
           >
             Weekly Sheet
           </button>
           <button
             onClick={() => setTab('payroll')}
-            className={`rounded-md px-3 py-1.5 ${tab === 'payroll' ? 'bg-brand-600 text-white' : 'text-slate-500'}`}
+            className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1.5 sm:px-3 ${tab === 'payroll' ? 'bg-brand-600 text-white' : 'text-slate-500'}`}
           >
             Payroll
           </button>
@@ -452,62 +457,71 @@ export default function FieldAttendance() {
               const w = workersById[r.workerId]
               if (!w) return null
               return (
-                <div key={r.id} className="flex flex-wrap items-center gap-3 surface p-3">
-                  <Avatar worker={w} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-semibold text-slate-800 dark:text-slate-100">{w.name}</span>
-                      <span className="rounded-full bg-slate-100 dark:bg-slate-700 px-2 py-0.5 text-[10px] font-bold text-slate-500">{w.id}</span>
+                <div key={r.id} className="surface p-3">
+                  {/* Identity row: name/id/edit stay together and never fight
+                      the controls below for wrap space on a narrow phone. */}
+                  <div className="flex items-center gap-3">
+                    <Avatar worker={w} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{w.name}</span>
+                          <span className="shrink-0 rounded-full bg-slate-100 dark:bg-slate-700 px-2 py-0.5 text-[10px] font-bold text-slate-500">{w.id}</span>
+                        </div>
+                        <button
+                          onClick={() => openEditWorker(w)}
+                          title="Edit worker details"
+                          className="shrink-0 rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:text-slate-300"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                      </div>
+                      <p className="truncate text-xs text-slate-400">{w.trade || 'Worker'}{w.phone ? ` · ${w.phone}` : ''}{w.bankAccount ? ` · Acct ${w.bankAccount}` : ''}</p>
                     </div>
-                    <p className="text-xs text-slate-400">{w.trade || 'Worker'}{w.phone ? ` · ${w.phone}` : ''}{w.bankAccount ? ` · Acct ${w.bankAccount}` : ''}</p>
                   </div>
 
-                  <button
-                    onClick={() => openEditWorker(w)}
-                    title="Edit worker details"
-                    className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:text-slate-300"
-                  >
-                    <Pencil size={14} />
-                  </button>
+                  {/* Attendance controls: their own row with a divider, so
+                      they always have a full-width line to wrap within. */}
+                  <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-slate-100 dark:border-slate-800 pt-3">
+                    {/* AM/PM — same two halves as the paper attendance card */}
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => updateAttendance(r.id, { am: !r.am })}
+                        disabled={weekLocked}
+                        className={`rounded-md px-2.5 py-1 text-xs font-bold disabled:opacity-60 ${r.am ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'}`}
+                        title="Morning"
+                      >
+                        AM
+                      </button>
+                      <button
+                        onClick={() => updateAttendance(r.id, { pm: !r.pm })}
+                        disabled={weekLocked}
+                        className={`rounded-md px-2.5 py-1 text-xs font-bold disabled:opacity-60 ${r.pm ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'}`}
+                        title="Afternoon"
+                      >
+                        PM
+                      </button>
+                    </div>
 
-                  {/* AM/PM — same two halves as the paper attendance card */}
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => updateAttendance(r.id, { am: !r.am })}
-                      disabled={weekLocked}
-                      className={`rounded-md px-2.5 py-1 text-xs font-bold disabled:opacity-60 ${r.am ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'}`}
-                      title="Morning"
-                    >
-                      AM
-                    </button>
-                    <button
-                      onClick={() => updateAttendance(r.id, { pm: !r.pm })}
-                      disabled={weekLocked}
-                      className={`rounded-md px-2.5 py-1 text-xs font-bold disabled:opacity-60 ${r.pm ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'}`}
-                      title="Afternoon"
-                    >
-                      PM
-                    </button>
+                    {/* OT hours */}
+                    <div className="flex items-center gap-1">
+                      <label className="text-[10px] font-semibold uppercase text-slate-400">OT</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.5"
+                        disabled={weekLocked}
+                        value={r.otHours || 0}
+                        onChange={(e) => updateAttendance(r.id, { otHours: e.target.value })}
+                        className="w-14 rounded-md border border-slate-200 dark:border-slate-700 px-1.5 py-1 text-xs disabled:opacity-60"
+                      />
+                      <span className="text-xs text-slate-400">hrs</span>
+                    </div>
+
+                    <span className="ml-auto text-[11px] font-medium text-slate-400">
+                      marked {new Date(r.registeredAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
                   </div>
-
-                  {/* OT hours */}
-                  <div className="flex items-center gap-1">
-                    <label className="text-[10px] font-semibold uppercase text-slate-400">OT</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.5"
-                      disabled={weekLocked}
-                      value={r.otHours || 0}
-                      onChange={(e) => updateAttendance(r.id, { otHours: e.target.value })}
-                      className="w-14 rounded-md border border-slate-200 dark:border-slate-700 px-1.5 py-1 text-xs disabled:opacity-60"
-                    />
-                    <span className="text-xs text-slate-400">hrs</span>
-                  </div>
-
-                  <span className="w-full text-right text-[11px] font-medium text-slate-400 sm:w-auto">
-                    marked {new Date(r.registeredAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
                 </div>
               )
             })}
@@ -539,6 +553,7 @@ export default function FieldAttendance() {
               <Download size={13} /> Download Weekly Sheet (CSV)
             </button>
           </div>
+          <ScrollHint>Swipe sideways to see the rest of the week</ScrollHint>
           <div className="overflow-x-auto surface">
             <table className="w-full border-collapse text-center text-xs">
               <thead className="bg-slate-50 dark:bg-slate-800 text-slate-500">
@@ -703,7 +718,8 @@ export default function FieldAttendance() {
             </div>
           )}
 
-          <div className="overflow-hidden surface">
+          <ScrollHint />
+          <div className="overflow-x-auto surface">
             <table className="w-full text-left text-sm">
               <thead className="bg-slate-50 dark:bg-slate-800 text-xs font-semibold uppercase text-slate-400">
                 <tr>

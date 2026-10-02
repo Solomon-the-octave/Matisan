@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { Plus, X, Trash2 } from 'lucide-react'
 import Layout from '../components/Layout'
 import Badge from '../components/Badge'
+import ScrollHint from '../components/ScrollHint'
 import api from '../api'
 import { useAuth } from '../context/AuthContext'
 
@@ -75,7 +76,8 @@ export default function Users() {
         </button>
       </div>
 
-      <div className="overflow-hidden surface shadow-sm">
+      <ScrollHint />
+      <div className="overflow-x-auto surface shadow-sm">
         <table className="w-full text-left text-sm">
           <thead className="bg-slate-50 dark:bg-slate-800 text-xs font-semibold uppercase text-slate-400">
             <tr>
