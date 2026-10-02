@@ -28,8 +28,6 @@ export default function Tasks() {
     if (u) setUsers(u.data.users)
   }
 
-  const deptName = (id) => departments.find((d) => d.id === id)?.name || id
-
   useEffect(() => {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
