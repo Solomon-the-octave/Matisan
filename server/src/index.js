@@ -65,6 +65,9 @@ if (fs.existsSync(clientDist)) {
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
+  if (err?.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).json({ error: 'File is too large (15MB max)' });
+  }
   console.error(err);
   res.status(500).json({ error: 'Internal server error' });
 });

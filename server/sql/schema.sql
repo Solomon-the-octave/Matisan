@@ -44,6 +44,21 @@ CREATE TABLE IF NOT EXISTS project_assignments (
   PRIMARY KEY ("projectId", "userId")
 );
 
+-- Admin-uploaded project files (permits, scopes, drawings) kept as bytea
+-- rather than on local disk, since Render's filesystem is ephemeral and
+-- wiped on every deploy. Fine for the modest PDF/doc sizes this is for;
+-- not meant for large files or many of them — see the 15MB cap in the route.
+CREATE TABLE IF NOT EXISTS project_documents (
+  id           text PRIMARY KEY,
+  "projectId"  text NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  filename     text NOT NULL,
+  "mimeType"   text NOT NULL,
+  size         integer NOT NULL,
+  data         bytea NOT NULL,
+  "uploadedBy" text REFERENCES users(id),
+  "uploadedAt" timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS tasks (
   id           text PRIMARY KEY,
   title        text NOT NULL,

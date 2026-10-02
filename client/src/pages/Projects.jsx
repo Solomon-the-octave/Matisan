@@ -1,11 +1,17 @@
-import { useEffect, useState } from 'react'
-import { Plus, X, MapPin, UserCog } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Plus, X, MapPin, UserCog, FileText, Upload, Download, Trash2, Loader2 } from 'lucide-react'
 import Layout from '../components/Layout'
 import Badge from '../components/Badge'
 import api from '../api'
 import { useAuth } from '../context/AuthContext'
 
 const emptyForm = { name: '', site: '', department: '', description: '' }
+
+function formatBytes(n) {
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`
+}
 
 export default function Projects() {
   const { user } = useAuth()
@@ -15,7 +21,12 @@ export default function Projects() {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [assignFor, setAssignFor] = useState(null) // project being edited in the assign panel
+  const [docsFor, setDocsFor] = useState(null) // project whose documents panel is open
+  const [docsByProject, setDocsByProject] = useState({})
+  const [uploadingFor, setUploadingFor] = useState(null)
+  const fileInputs = useRef({})
   const canManage = user.role === 'admin' || user.role === 'supervisor'
+  const canUploadDocs = user.role === 'admin'
 
   async function load() {
     const calls = [api.get('/projects'), api.get('/departments')]
@@ -29,6 +40,51 @@ export default function Projects() {
   async function setAssignment(project, userId, action) {
     await api.put(`/projects/${project.id}/assignments`, { userId, action })
     load()
+  }
+
+  async function loadDocuments(projectId) {
+    const res = await api.get(`/projects/${projectId}/documents`)
+    setDocsByProject((d) => ({ ...d, [projectId]: res.data.documents }))
+  }
+
+  async function toggleDocs(projectId) {
+    if (docsFor === projectId) {
+      setDocsFor(null)
+      return
+    }
+    setDocsFor(projectId)
+    if (!docsByProject[projectId]) await loadDocuments(projectId)
+  }
+
+  async function uploadDocument(projectId, file) {
+    if (!file) return
+    const formData = new FormData()
+    formData.append('file', file)
+    setUploadingFor(projectId)
+    try {
+      await api.post(`/projects/${projectId}/documents`, formData)
+      await loadDocuments(projectId)
+    } catch (err) {
+      alert(err.response?.data?.error || 'Upload failed')
+    } finally {
+      setUploadingFor(null)
+      if (fileInputs.current[projectId]) fileInputs.current[projectId].value = ''
+    }
+  }
+
+  async function deleteDocument(projectId, docId) {
+    await api.delete(`/projects/${projectId}/documents/${docId}`)
+    loadDocuments(projectId)
+  }
+
+  async function downloadDocument(projectId, doc) {
+    const res = await api.get(`/projects/${projectId}/documents/${doc.id}`, { responseType: 'blob' })
+    const url = URL.createObjectURL(res.data)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = doc.filename
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   useEffect(() => {
@@ -138,6 +194,62 @@ export default function Projects() {
                       })}
                     {users.filter((u) => u.role === 'employee' && u.department === p.department).length === 0 && (
                       <p className="px-2 py-1 text-xs text-slate-400">No employees in this department yet.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {canManage && (
+              <div className="mt-3 border-t border-slate-100 dark:border-slate-800 pt-3">
+                <button
+                  onClick={() => toggleDocs(p.id)}
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-600 dark:text-brand-400 hover:text-brand-700"
+                >
+                  <FileText size={13} /> Documents {docsByProject[p.id] ? `(${docsByProject[p.id].length})` : ''}
+                </button>
+                {docsFor === p.id && (
+                  <div className="mt-2 space-y-1.5">
+                    {(docsByProject[p.id] || []).map((doc) => (
+                      <div key={doc.id} className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-slate-50 dark:hover:bg-slate-800">
+                        <button
+                          onClick={() => downloadDocument(p.id, doc)}
+                          className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-slate-600 dark:text-slate-300 hover:text-brand-600 dark:hover:text-brand-400"
+                          title={`Download ${doc.filename}`}
+                        >
+                          <Download size={12} className="shrink-0" />
+                          <span className="truncate">{doc.filename}</span>
+                          <span className="shrink-0 text-slate-400">{formatBytes(doc.size)}</span>
+                        </button>
+                        {canUploadDocs && (
+                          <button
+                            onClick={() => deleteDocument(p.id, doc.id)}
+                            className="shrink-0 text-slate-300 hover:text-rose-500 dark:text-slate-600 dark:hover:text-rose-400"
+                            title="Delete document"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    {docsByProject[p.id]?.length === 0 && (
+                      <p className="px-2 py-1 text-xs text-slate-400">No documents uploaded yet.</p>
+                    )}
+                    {canUploadDocs && (
+                      <label className="mt-1 flex cursor-pointer items-center justify-center gap-1.5 rounded-md border border-dashed border-slate-200 dark:border-slate-700 px-2 py-2 text-xs font-medium text-slate-500 dark:text-slate-400 hover:border-brand-300 dark:hover:border-brand-500/40 hover:text-brand-600 dark:hover:text-brand-400">
+                        {uploadingFor === p.id ? (
+                          <><Loader2 size={13} className="animate-spin" /> Uploading...</>
+                        ) : (
+                          <><Upload size={13} /> Upload document</>
+                        )}
+                        <input
+                          ref={(el) => (fileInputs.current[p.id] = el)}
+                          type="file"
+                          className="hidden"
+                          disabled={uploadingFor === p.id}
+                          onChange={(e) => uploadDocument(p.id, e.target.files[0])}
+                        />
+                      </label>
                     )}
                   </div>
                 )}

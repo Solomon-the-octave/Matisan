@@ -1,8 +1,15 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { rows, row, query, generateId } from '../db.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 
 const router = Router();
+
+// Kept in memory only for the length of the request, then written straight
+// into Postgres as bytea — nothing ever touches local disk, which Render's
+// free tier wipes on every deploy anyway. 15MB covers a permit or scope PDF
+// without letting the free Neon database fill up on a handful of uploads.
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
 // Every project row, with its assigned-employee IDs folded in as an array —
 // same shape the client has always received (`project.assignedEmployees`).
@@ -110,6 +117,74 @@ router.put('/:id/assignments', requireAuth, requireRole('admin', 'supervisor'), 
     await query('DELETE FROM project_assignments WHERE "projectId" = $1 AND "userId" = $2', [project.id, userId]);
   }
   res.json({ project: await getProject(project.id) });
+});
+
+// --- Project documents ----------------------------------------------------
+// Admin uploads permits/scopes/drawings against a project; anyone who can
+// already see that project (admin, its own-department supervisor, finance,
+// or an assigned employee) can list and download them.
+
+router.get('/:id/documents', requireAuth, async (req, res) => {
+  const project = await getProject(req.params.id);
+  if (!project) return res.status(404).json({ error: 'Project not found' });
+  if (!canAccessProject(req.user, project)) {
+    return res.status(403).json({ error: "You're not assigned to that project" });
+  }
+  const docs = await rows(
+    `SELECT d.id, d.filename, d."mimeType", d.size, d."uploadedAt", u.name AS "uploadedByName"
+     FROM project_documents d LEFT JOIN users u ON u.id = d."uploadedBy"
+     WHERE d."projectId" = $1 ORDER BY d."uploadedAt" DESC`,
+    [project.id]
+  );
+  res.json({ documents: docs });
+});
+
+router.post('/:id/documents', requireAuth, requireRole('admin'), upload.single('file'), async (req, res) => {
+  const project = await getProject(req.params.id);
+  if (!project) return res.status(404).json({ error: 'Project not found' });
+  if (!req.user.isGlobalAdmin && project.department !== req.user.department) {
+    return res.status(403).json({ error: 'Outside your department access point' });
+  }
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+  const id = generateId('doc');
+  await query(
+    `INSERT INTO project_documents (id, "projectId", filename, "mimeType", size, data, "uploadedBy")
+     VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+    [id, project.id, req.file.originalname, req.file.mimetype, req.file.size, req.file.buffer, req.user.id]
+  );
+  const docs = await rows(
+    `SELECT d.id, d.filename, d."mimeType", d.size, d."uploadedAt", u.name AS "uploadedByName"
+     FROM project_documents d LEFT JOIN users u ON u.id = d."uploadedBy"
+     WHERE d."projectId" = $1 ORDER BY d."uploadedAt" DESC`,
+    [project.id]
+  );
+  res.status(201).json({ documents: docs });
+});
+
+router.get('/:id/documents/:docId', requireAuth, async (req, res) => {
+  const project = await getProject(req.params.id);
+  if (!project) return res.status(404).json({ error: 'Project not found' });
+  if (!canAccessProject(req.user, project)) {
+    return res.status(403).json({ error: "You're not assigned to that project" });
+  }
+  const doc = await row(
+    'SELECT * FROM project_documents WHERE id = $1 AND "projectId" = $2',
+    [req.params.docId, project.id]
+  );
+  if (!doc) return res.status(404).json({ error: 'Document not found' });
+  res.setHeader('Content-Type', doc.mimeType);
+  res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(doc.filename)}"`);
+  res.send(doc.data);
+});
+
+router.delete('/:id/documents/:docId', requireAuth, requireRole('admin'), async (req, res) => {
+  const project = await getProject(req.params.id);
+  if (!project) return res.status(404).json({ error: 'Project not found' });
+  if (!req.user.isGlobalAdmin && project.department !== req.user.department) {
+    return res.status(403).json({ error: 'Outside your department access point' });
+  }
+  await query('DELETE FROM project_documents WHERE id = $1 AND "projectId" = $2', [req.params.docId, project.id]);
+  res.status(204).end();
 });
 
 export default router;
