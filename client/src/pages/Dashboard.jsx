@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   FolderKanban, CheckCircle2, ClipboardList, CalendarCheck, Plus, Users, Clock, Download,
+  PenLine, HardHat, Wallet,
 } from 'lucide-react'
 import Layout from '../components/Layout'
 import StatCard from '../components/StatCard'
@@ -16,21 +17,45 @@ export default function Dashboard() {
   const [projects, setProjects] = useState([])
   const [tasks, setTasks] = useState([])
   const [busy, setBusy] = useState(false)
+  const [payrollPeriods, setPayrollPeriods] = useState([])
+  const [sitePayroll, setSitePayroll] = useState(null)
+  const [signingId, setSigningId] = useState(null)
 
   async function load() {
-    const [s, p, t] = await Promise.all([
+    const today = new Date().toISOString().slice(0, 10)
+    const calls = [
       api.get('/reports/summary'),
       api.get('/projects'),
       api.get('/tasks'),
-    ])
+    ]
+    if (user.role === 'admin') {
+      calls.push(api.get('/payroll-periods'))
+      calls.push(api.get('/worker-attendance/payroll', { params: { from: today, to: today } }))
+    }
+    const [s, p, t, pp, site] = await Promise.all(calls)
     setSummary(s.data)
     setProjects(p.data.projects)
     setTasks(t.data.tasks)
+    if (pp) setPayrollPeriods(pp.data.periods)
+    if (site) setSitePayroll(site.data)
   }
 
   useEffect(() => {
     load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  async function signApprove(periodId) {
+    setSigningId(periodId)
+    try {
+      await api.put(`/payroll-periods/${periodId}/approve`)
+      await load()
+    } catch (e) {
+      alert(e.response?.data?.error || 'Could not approve this period')
+    } finally {
+      setSigningId(null)
+    }
+  }
 
   async function handleCheckIn() {
     setBusy(true)
@@ -92,6 +117,56 @@ export default function Dashboard() {
           <StatCard label="Attendance Today" value={summary.attendanceToday} icon={CalendarCheck} />
         </div>
 
+        {/* Field attendance / payroll performance — the system this whole
+            app was built to replace the paper process for. */}
+        <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
+          <StatCard label="Site Workers On Today" value={sitePayroll?.totals.workers ?? 0} icon={HardHat} />
+          <StatCard label="Today's Labor Cost" value={(sitePayroll?.totals.cost ?? 0).toLocaleString()} icon={Wallet} />
+          <StatCard
+            label="Awaiting Your Signature"
+            value={payrollPeriods.filter((pp) => pp.status === 'finance_checked').length}
+            icon={PenLine}
+          />
+        </div>
+
+        {/* Documents Finance has checked and handed to the admin for final
+            sign-off — the digital equivalent of the "Approved by" line on
+            the paper payroll sheet. */}
+        <div className="mt-6 surface p-4 shadow-sm">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-bold text-slate-700">Awaiting Your Signature</h3>
+            <button onClick={() => navigate('/payroll-review')} className="text-xs font-semibold text-brand-600 hover:underline">Review all &rarr;</button>
+          </div>
+          {payrollPeriods.filter((pp) => pp.status === 'finance_checked').length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8 text-center">
+              <CheckCircle2 className="mb-2 text-emerald-400" size={26} />
+              <p className="text-sm font-medium text-slate-500">Nothing waiting on your signature</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {payrollPeriods
+                .filter((pp) => pp.status === 'finance_checked')
+                .map((pp) => (
+                  <div key={pp.id} className="flex items-center justify-between gap-3 py-2.5">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-semibold text-slate-700">
+                        {projects.find((p) => p.id === pp.projectId)?.name || pp.projectId}
+                      </div>
+                      <div className="text-xs text-slate-400">{pp.weekStart} – {pp.weekEnd} · checked by Finance</div>
+                    </div>
+                    <button
+                      onClick={() => signApprove(pp.id)}
+                      disabled={signingId === pp.id}
+                      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+                    >
+                      <PenLine size={13} /> {signingId === pp.id ? 'Signing...' : 'Sign & Approve'}
+                    </button>
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
+
         <div className="mt-6 grid gap-4 lg:grid-cols-2">
           <Panel title="Recent Projects" onSeeAll={() => navigate('/projects')}>
             {projects.slice(0, 4).map((p) => (
@@ -109,10 +184,11 @@ export default function Dashboard() {
 
         <div className="mt-6 surface p-4 shadow-sm">
           <h3 className="mb-3 text-sm font-bold text-slate-700">Quick Actions</h3>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
             <QuickAction icon={Plus} label="New Project" onClick={() => navigate('/projects')} primary />
             <QuickAction icon={Users} label="Manage Users" onClick={() => navigate('/users')} />
             <QuickAction icon={CalendarCheck} label="Check Attendance" onClick={() => navigate('/attendance')} />
+            <QuickAction icon={HardHat} label="Field Attendance" onClick={() => navigate('/field-attendance')} />
           </div>
         </div>
       </Layout>
@@ -141,6 +217,15 @@ export default function Dashboard() {
               <ListRow key={t.id} title={t.title} subtitle="Submitted - awaiting your review" right={<Badge value={t.priority} />} />
             ))
           )}
+        </div>
+
+        <div className="mt-6 surface p-4 shadow-sm">
+          <h3 className="mb-3 text-sm font-bold text-slate-700">Quick Actions</h3>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <QuickAction icon={HardHat} label="Field Attendance & Weekly Sheet" onClick={() => navigate('/field-attendance')} primary />
+            <QuickAction icon={PenLine} label="Submit Week for Payroll" onClick={() => navigate('/payroll-review')} />
+            <QuickAction icon={ClipboardList} label="Create Task" onClick={() => navigate('/tasks')} />
+          </div>
         </div>
       </Layout>
     )
@@ -197,6 +282,12 @@ export default function Dashboard() {
           .map((t) => (
             <ListRow key={t.id} title={t.title} subtitle={t.description} right={<Badge value={t.priority} />} />
           ))}
+      </div>
+
+      <div className="mt-6 surface p-4 shadow-sm">
+        <h3 className="mb-2 text-sm font-bold text-slate-700">On Site Today?</h3>
+        <p className="mb-3 text-xs text-slate-400">Register new workers and mark who's present — the same roll call your site used to do on paper.</p>
+        <QuickAction icon={HardHat} label="Go to Field Attendance" onClick={() => navigate('/field-attendance')} primary />
       </div>
     </Layout>
   )

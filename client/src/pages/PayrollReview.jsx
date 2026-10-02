@@ -1,9 +1,24 @@
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, Send, RotateCcw, Wallet } from 'lucide-react'
+import { CheckCircle2, Send, RotateCcw, Wallet, Download } from 'lucide-react'
 import Layout from '../components/Layout'
 import Badge from '../components/Badge'
 import api from '../api'
 import { useAuth } from '../context/AuthContext'
+
+// Same download helper as Field Attendance — hands over exactly what's on
+// screen as a file, column-for-column with the paper sheets.
+async function downloadCsv(params, fallbackName) {
+  const res = await api.get('/worker-attendance/export', { params, responseType: 'blob' })
+  const disposition = res.headers['content-disposition'] || ''
+  const match = disposition.match(/filename="([^"]+)"/)
+  const filename = match ? match[1] : fallbackName
+  const url = URL.createObjectURL(new Blob([res.data], { type: 'text/csv' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 // Monday-Sunday week containing `d`, as ISO date strings — the same window
 // a paper weekly attendance/payroll sheet would cover.
@@ -138,6 +153,7 @@ export default function PayrollReview() {
               <th className="px-4 py-3">Week</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3">Payroll total</th>
+              <th className="px-4 py-3">Download</th>
               <th className="px-4 py-3"></th>
             </tr>
           </thead>
@@ -164,6 +180,28 @@ export default function PayrollReview() {
                         )}
                       </>
                     ) : '-'}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex flex-col items-start gap-1">
+                      <button
+                        onClick={() => downloadCsv(
+                          { projectId: period.projectId, type: 'weekly-sheet', from: period.weekStart, to: period.weekEnd },
+                          `weekly-sheet-${period.projectId}-${period.weekStart}-to-${period.weekEnd}.csv`
+                        )}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-brand-600"
+                      >
+                        <Download size={12} /> Weekly sheet
+                      </button>
+                      <button
+                        onClick={() => downloadCsv(
+                          { projectId: period.projectId, type: 'payroll', from: period.weekStart, to: period.weekEnd },
+                          `payroll-${period.projectId}-${period.weekStart}-to-${period.weekEnd}.csv`
+                        )}
+                        className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-brand-600"
+                      >
+                        <Download size={12} /> Payroll
+                      </button>
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-right">
                     {period.status === 'submitted' && canFinanceCheck && (
@@ -198,7 +236,7 @@ export default function PayrollReview() {
               )
             })}
             {periods.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-sm text-slate-400">No payroll periods submitted yet</td></tr>
+              <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-400">No payroll periods submitted yet</td></tr>
             )}
           </tbody>
         </table>

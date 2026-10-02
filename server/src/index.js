@@ -2,7 +2,10 @@ import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
-import { initDb } from './db.js';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import { assertDbConnection } from './db.js';
 
 import authRoutes from './routes/auth.js';
 import departmentRoutes from './routes/departments.js';
@@ -25,7 +28,14 @@ app.use(cors({ origin: process.env.CLIENT_ORIGIN || '*' }));
 app.use(express.json({ limit: '6mb' }));
 app.use(morgan('dev'));
 
-app.get('/api/health', (req, res) => res.json({ ok: true, service: 'Matisan HR API' }));
+app.get('/api/health', async (req, res) => {
+  try {
+    await assertDbConnection();
+    res.json({ ok: true, service: 'Matisan HR API', db: 'connected' });
+  } catch (err) {
+    res.status(503).json({ ok: false, service: 'Matisan HR API', db: 'unreachable' });
+  }
+});
 
 app.use('/api/auth', authRoutes);
 app.use('/api/departments', departmentRoutes);
@@ -38,6 +48,20 @@ app.use('/api/workers', workerRoutes);
 app.use('/api/worker-attendance', workerAttendanceRoutes);
 app.use('/api/payroll-periods', payrollPeriodRoutes);
 
+// In production this one process serves both the API and the built React
+// app — one Render service, one URL, no CORS or separate-origin config to
+// get wrong. The client's `axios` baseURL is the relative `/api`, which
+// resolves correctly either way.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const clientDist = path.join(__dirname, '..', '..', 'client', 'dist');
+if (fs.existsSync(clientDist)) {
+  app.use(express.static(clientDist));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next();
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+}
+
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
@@ -45,8 +69,13 @@ app.use((err, req, res, next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-initDb().then(() => {
-  app.listen(PORT, () => {
-    console.log(`Matisan HR API running on http://localhost:${PORT}`);
+assertDbConnection()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`Matisan HR API running on http://localhost:${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error('Could not connect to the database. Check DATABASE_URL.', err.message);
+    process.exit(1);
   });
-});

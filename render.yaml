@@ -1,0 +1,32 @@
+# Render Blueprint — one web service serves both the API and the built
+# React app (see server/src/index.js), so there's a single URL and no
+# cross-origin config. The Postgres database itself is NOT defined here:
+# we use a free Neon Postgres project instead of Render's own Postgres,
+# because Render's free Postgres tier auto-deletes the database after 30
+# days — a bad fit for data a real company depends on. See DEPLOYMENT.md.
+#
+# To use this file: Render dashboard -> New -> Blueprint -> pick this repo.
+# Render reads this file and creates the service below automatically.
+
+services:
+  - type: web
+    name: matisan-hr
+    runtime: node
+    plan: free
+    rootDir: .
+    buildCommand: npm run build
+    startCommand: npm run start
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false # paste your Neon connection string in the Render dashboard
+      - key: PGSSL
+        value: require
+      - key: JWT_SECRET
+        generateValue: true # Render generates and stores a strong random secret
+      - key: SEED_ADMIN_EMAIL
+        sync: false # optional — defaults to admin@matisans.com if unset
+      - key: SEED_ADMIN_PASSWORD
+        sync: false # optional — defaults to Admin@123 if unset; set this for a real deploy

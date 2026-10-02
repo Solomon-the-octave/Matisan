@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import db, { generateId } from '../db.js';
+import { rows, row, query, generateId } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { canAccessProject } from './projects.js';
 import { findLockedPeriod } from './payrollPeriods.js';
@@ -11,27 +11,44 @@ function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
-function assignedProjectIds(user) {
-  return db.data.projects.filter((p) => (p.assignedEmployees || []).includes(user.id)).map((p) => p.id);
+async function assignedProjectIds(user) {
+  const r = await rows('SELECT "projectId" FROM project_assignments WHERE "userId" = $1', [user.id]);
+  return r.map((x) => x.projectId);
 }
 
-function visibleRecords(user) {
-  if (user.isGlobalAdmin || user.role === 'finance') return db.data.workerAttendance;
-  if (user.role === 'employee') {
-    const ids = assignedProjectIds(user);
-    return db.data.workerAttendance.filter((r) => r.department === user.department && ids.includes(r.projectId));
+async function visibleRecords(user, { date, projectId } = {}) {
+  const clauses = [];
+  const args = [];
+  if (user.isGlobalAdmin || user.role === 'finance') {
+    // no department restriction
+  } else if (user.role === 'employee') {
+    const ids = await assignedProjectIds(user);
+    args.push(user.department);
+    clauses.push(`department = $${args.length}`);
+    if (ids.length === 0) return [];
+    args.push(ids);
+    clauses.push(`"projectId" = ANY($${args.length})`);
+  } else {
+    args.push(user.department);
+    clauses.push(`department = $${args.length}`);
   }
-  return db.data.workerAttendance.filter((r) => r.department === user.department);
+  if (date) {
+    args.push(date);
+    clauses.push(`date = $${args.length}`);
+  }
+  if (projectId) {
+    args.push(projectId);
+    clauses.push(`"projectId" = $${args.length}`);
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  return rows(`SELECT * FROM worker_attendance ${where} ORDER BY date DESC`, args);
 }
 
 // List today's (or a given date's) roster for a project — this is what the
 // head office / site registrar sees: who's on site right now.
-router.get('/', requireAuth, (req, res) => {
-  let records = visibleRecords(req.user);
+router.get('/', requireAuth, async (req, res) => {
   const { date, projectId } = req.query;
-  if (date) records = records.filter((r) => r.date === date);
-  if (projectId) records = records.filter((r) => r.projectId === projectId);
-  res.json({ attendance: records });
+  res.json({ attendance: await visibleRecords(req.user, { date, projectId }) });
 });
 
 // Register a worker as present today (or on a given date). Idempotent: if
@@ -44,7 +61,7 @@ router.post('/', requireAuth, async (req, res) => {
   const { workerId, projectId, date, am, pm, otHours } = req.body;
   if (!workerId) return res.status(400).json({ error: 'workerId is required' });
 
-  const worker = db.data.workers.find((w) => w.id === workerId);
+  const worker = await row('SELECT * FROM workers WHERE id = $1', [workerId]);
   if (!worker) return res.status(404).json({ error: 'Worker not found' });
   if (!req.user.isGlobalAdmin && worker.department !== req.user.department) {
     return res.status(403).json({ error: 'Outside your department access point' });
@@ -52,7 +69,10 @@ router.post('/', requireAuth, async (req, res) => {
 
   const effectiveProjectId = projectId || worker.projectId || null;
   if (effectiveProjectId) {
-    const project = db.data.projects.find((p) => p.id === effectiveProjectId);
+    const project = await row(
+      `SELECT p.*, COALESCE((SELECT array_agg(pa."userId") FROM project_assignments pa WHERE pa."projectId" = p.id), ARRAY[]::text[]) AS "assignedEmployees" FROM projects p WHERE p.id = $1`,
+      [effectiveProjectId]
+    );
     if (!project || !canAccessProject(req.user, project)) {
       return res.status(403).json({ error: "You're not assigned to that project" });
     }
@@ -62,70 +82,91 @@ router.post('/', requireAuth, async (req, res) => {
   }
 
   const day = date || todayStr();
-  if (effectiveProjectId && findLockedPeriod(effectiveProjectId, day) && !req.user.isGlobalAdmin) {
+  if (effectiveProjectId && !req.user.isGlobalAdmin && (await findLockedPeriod(effectiveProjectId, day))) {
     return res.status(423).json({ error: 'This week has been approved and is locked. Ask an admin to reopen it.' });
   }
-  const existing = db.data.workerAttendance.find((r) => r.workerId === workerId && r.date === day);
+  const existing = await row('SELECT * FROM worker_attendance WHERE "workerId" = $1 AND date = $2', [workerId, day]);
   if (existing) {
     return res.json({ attendance: existing, alreadyRegistered: true });
   }
 
-  const record = {
-    id: generateId('wa'),
-    workerId,
-    projectId: effectiveProjectId,
-    department: worker.department,
-    date: day,
-    // Default a quick "mark present" tap to a full day; either half (or an
-    // explicit half-day registration) can override.
-    am: am === undefined ? true : !!am,
-    pm: pm === undefined ? true : !!pm,
-    otHours: otHours ? Number(otHours) : 0,
-    registeredBy: req.user.id,
-    registeredAt: new Date().toISOString(),
-  };
-  db.data.workerAttendance.push(record);
+  const id = generateId('wa');
+  await query(
+    `INSERT INTO worker_attendance (id, "workerId", "projectId", department, date, am, pm, "otHours", "registeredBy", "registeredAt")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,now())`,
+    [
+      id,
+      workerId,
+      effectiveProjectId,
+      worker.department,
+      day,
+      // Default a quick "mark present" tap to a full day; either half (or an
+      // explicit half-day registration) can override.
+      am === undefined ? true : !!am,
+      pm === undefined ? true : !!pm,
+      otHours ? Number(otHours) : 0,
+      req.user.id,
+    ]
+  );
   // Keep the worker's "home" project current so next time they're the
   // default suggestion for that site.
-  if (projectId) worker.projectId = projectId;
-  await db.write();
-  res.status(201).json({ attendance: record });
+  if (projectId) await query('UPDATE workers SET "projectId" = $1 WHERE id = $2', [projectId, workerId]);
+
+  res.status(201).json({ attendance: await row('SELECT * FROM worker_attendance WHERE id = $1', [id]) });
 });
 
 // Adjust an existing day's record — toggle Morning/Afternoon or log OT
 // hours, the same correction a foreman would make by hand on the card.
 router.put('/:id', requireAuth, async (req, res) => {
-  const record = db.data.workerAttendance.find((r) => r.id === req.params.id);
+  const record = await row('SELECT * FROM worker_attendance WHERE id = $1', [req.params.id]);
   if (!record) return res.status(404).json({ error: 'Attendance record not found' });
   if (!req.user.isGlobalAdmin && record.department !== req.user.department) {
     return res.status(403).json({ error: 'Outside your department access point' });
   }
   if (req.user.role === 'employee') {
-    const ids = assignedProjectIds(req.user);
+    const ids = await assignedProjectIds(req.user);
     if (!ids.includes(record.projectId)) {
       return res.status(403).json({ error: "You're not assigned to that project" });
     }
   }
-  if (record.projectId && findLockedPeriod(record.projectId, record.date) && !req.user.isGlobalAdmin) {
+  if (record.projectId && !req.user.isGlobalAdmin && (await findLockedPeriod(record.projectId, record.date))) {
     return res.status(423).json({ error: 'This week has been approved and is locked. Ask an admin to reopen it.' });
   }
   const { am, pm, otHours } = req.body;
-  if (am !== undefined) record.am = !!am;
-  if (pm !== undefined) record.pm = !!pm;
-  if (otHours !== undefined) record.otHours = Number(otHours) || 0;
-  await db.write();
-  res.json({ attendance: record });
+  await query(
+    `UPDATE worker_attendance SET
+       am = CASE WHEN $1::boolean THEN $2 ELSE am END,
+       pm = CASE WHEN $3::boolean THEN $4 ELSE pm END,
+       "otHours" = CASE WHEN $5::boolean THEN $6 ELSE "otHours" END
+     WHERE id = $7`,
+    [am !== undefined, !!am, pm !== undefined, !!pm, otHours !== undefined, Number(otHours) || 0, record.id]
+  );
+  res.json({ attendance: await row('SELECT * FROM worker_attendance WHERE id = $1', [record.id]) });
 });
 
-// Lightweight running payroll: for each worker, how many days they've been
-// marked present (optionally within a date range / project) and what that
-// adds up to at their day rate.
-router.get('/payroll', requireAuth, (req, res) => {
-  const { projectId, from, to } = req.query;
-  let records = visibleRecords(req.user);
-  if (projectId) records = records.filter((r) => r.projectId === projectId);
-  if (from) records = records.filter((r) => r.date >= from);
-  if (to) records = records.filter((r) => r.date <= to);
+// Shared by the on-screen "/payroll" view and the "/export" CSV download so
+// the two can never drift apart — same numbers, same rules, two formats.
+async function computePayroll(user, { projectId, from, to } = {}) {
+  const clauses = [];
+  const args = [];
+  if (!(user.isGlobalAdmin || user.role === 'finance')) {
+    args.push(user.department);
+    clauses.push(`department = $${args.length}`);
+  }
+  if (projectId) {
+    args.push(projectId);
+    clauses.push(`"projectId" = $${args.length}`);
+  }
+  if (from) {
+    args.push(from);
+    clauses.push(`date >= $${args.length}`);
+  }
+  if (to) {
+    args.push(to);
+    clauses.push(`date <= $${args.length}`);
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  const records = await rows(`SELECT * FROM worker_attendance ${where}`, args);
 
   const byWorker = new Map();
   for (const r of records) {
@@ -137,9 +178,9 @@ router.get('/payroll', requireAuth, (req, res) => {
     byWorker.set(r.workerId, prior);
   }
 
-  const workers = req.user.isGlobalAdmin || req.user.role === 'finance'
-    ? db.data.workers
-    : db.data.workers.filter((w) => w.department === req.user.department);
+  const workers = user.isGlobalAdmin || user.role === 'finance'
+    ? await rows('SELECT * FROM workers')
+    : await rows('SELECT * FROM workers WHERE department = $1', [user.department]);
 
   const payroll = workers
     .filter((w) => byWorker.has(w.id))
@@ -178,7 +219,7 @@ router.get('/payroll', requireAuth, (req, res) => {
     byLaborType[key].cost = Math.round(byLaborType[key].cost * 100) / 100;
   }
 
-  res.json({
+  return {
     payroll,
     totals: {
       workers: payroll.length,
@@ -187,7 +228,113 @@ router.get('/payroll', requireAuth, (req, res) => {
       cost: payroll.reduce((s, p) => s + (p.total || 0), 0),
       byLaborType,
     },
+  };
+}
+
+router.get('/payroll', requireAuth, async (req, res) => {
+  const { projectId, from, to } = req.query;
+  res.json(await computePayroll(req.user, { projectId, from, to }));
+});
+
+// CSV downloads matching the paper sheets column-for-column, so a supervisor
+// or admin can hand over exactly what they used to print and sign.
+// type=weekly-sheet -> Daily Labors Attendance Sheet (one project + week,
+//   M/A/OT per day). type=payroll (default) -> Daily Labors Payroll Sheet.
+router.get('/export', requireAuth, async (req, res) => {
+  const { projectId, from, to, type } = req.query;
+
+  if (projectId) {
+    const project = await row(
+      `SELECT p.*, COALESCE((SELECT array_agg(pa."userId") FROM project_assignments pa WHERE pa."projectId" = p.id), ARRAY[]::text[]) AS "assignedEmployees" FROM projects p WHERE p.id = $1`,
+      [projectId]
+    );
+    if (!project || !canAccessProject(req.user, project)) {
+      return res.status(403).json({ error: "You're not assigned to that project" });
+    }
+  } else if (!req.user.isGlobalAdmin && req.user.role !== 'finance') {
+    return res.status(400).json({ error: 'A project is required' });
+  }
+
+  if (type === 'weekly-sheet') {
+    if (!projectId || !from || !to) {
+      return res.status(400).json({ error: 'projectId, from and to are required for a weekly sheet export' });
+    }
+    const project = await row('SELECT * FROM projects WHERE id = $1', [projectId]);
+    const dates = [];
+    const cursor = new Date(from + 'T00:00:00');
+    const end = new Date(to + 'T00:00:00');
+    while (cursor <= end) {
+      dates.push(cursor.toISOString().slice(0, 10));
+      cursor.setDate(cursor.getDate() + 1);
+    }
+
+    const scopeWorkers = req.user.isGlobalAdmin || req.user.role === 'finance'
+      ? await rows('SELECT * FROM workers WHERE "projectId" = $1', [projectId])
+      : await rows('SELECT * FROM workers WHERE department = $1 AND "projectId" = $2', [req.user.department, projectId]);
+
+    const records = await rows(
+      'SELECT * FROM worker_attendance WHERE "projectId" = $1 AND date = ANY($2)',
+      [projectId, dates]
+    );
+    const byWorkerDate = {};
+    records.forEach((r) => {
+      byWorkerDate[r.workerId] = byWorkerDate[r.workerId] || {};
+      byWorkerDate[r.workerId][r.date] = r;
+    });
+
+    const csvCell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const header = [
+      'No', 'Name', 'Job Title',
+      ...dates.flatMap((d) => [`${d} M`, `${d} A`, `${d} OT`]),
+      'Total Working Days', 'Total OT Hours',
+    ];
+    const lines = [header.map(csvCell).join(',')];
+    scopeWorkers.forEach((w, i) => {
+      const days = byWorkerDate[w.id] || {};
+      let totalDays = 0;
+      let totalOT = 0;
+      const cells = dates.flatMap((d) => {
+        const r = days[d];
+        if (r) {
+          totalDays += (r.am ? 0.5 : 0) + (r.pm ? 0.5 : 0);
+          totalOT += r.otHours || 0;
+        }
+        return [r?.am ? '1' : '', r?.pm ? '1' : '', r?.otHours || ''];
+      });
+      lines.push([i + 1, w.name, w.trade || '', ...cells, totalDays, totalOT].map(csvCell).join(','));
+    });
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="weekly-sheet-${(project?.name || projectId).replace(/[^a-z0-9]+/gi, '-')}-${from}-to-${to}.csv"`);
+    return res.send(lines.join('\n'));
+  }
+
+  // Daily Labors Payroll Sheet shape — same numbers as the on-screen
+  // Payroll tab / Payroll Review, just handed over as a file.
+  const { payroll } = await computePayroll(req.user, { projectId, from, to });
+  const project = projectId ? await row('SELECT * FROM projects WHERE id = $1', [projectId]) : null;
+  const csvCell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const header = [
+    'S/N', 'Name', 'Job Title', 'Labor Type', 'Days', 'Cost per day ETB',
+    'Gross Earning ETB', 'Over Time Hour', 'Ordinary Hourly Rate ETB',
+    'Overtime Earning', 'Total Payment ETB', 'Account',
+  ];
+  const lines = [header.map(csvCell).join(',')];
+  payroll.forEach((p, i) => {
+    const hourlyRate = p.dailyRate ? Math.round((p.dailyRate / 8) * 100) / 100 : '';
+    const grossEarning = p.dailyRate ? Math.round(p.dailyRate * p.daysPresent * 100) / 100 : '';
+    const otEarning = p.dailyRate && p.otHours ? Math.round((p.dailyRate / 8) * 1.5 * p.otHours * 100) / 100 : '';
+    lines.push([
+      i + 1, p.name, p.trade || '', p.laborType, p.daysPresent, p.dailyRate ?? '',
+      grossEarning, p.otHours || '', hourlyRate, otEarning, p.total ?? '', p.bankAccount || '',
+    ].map(csvCell).join(','));
   });
+
+  res.setHeader('Content-Type', 'text/csv');
+  const label = project ? project.name.replace(/[^a-z0-9]+/gi, '-') : 'all-projects';
+  const range = from && to ? `-${from}-to-${to}` : '';
+  res.setHeader('Content-Disposition', `attachment; filename="payroll-${label}${range}.csv"`);
+  res.send(lines.join('\n'));
 });
 
 export default router;

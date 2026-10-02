@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
-import db, { generateId } from '../db.js';
+import { row, query } from '../db.js';
 import { signToken, requireAuth } from '../middleware/auth.js';
 
 const router = Router();
@@ -10,11 +10,11 @@ function publicUser(u) {
   return rest;
 }
 
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
 
-  const user = db.data.users.find((u) => u.email.toLowerCase() === String(email).toLowerCase());
+  const user = await row('SELECT * FROM users WHERE lower(email) = lower($1)', [String(email)]);
   if (!user || !bcrypt.compareSync(password, user.passwordHash)) {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
@@ -35,9 +35,7 @@ router.post('/change-password', requireAuth, async (req, res) => {
   if (!bcrypt.compareSync(currentPassword, req.user.passwordHash)) {
     return res.status(401).json({ error: 'Current password is incorrect' });
   }
-  const idx = db.data.users.findIndex((u) => u.id === req.user.id);
-  db.data.users[idx].passwordHash = bcrypt.hashSync(newPassword, 10);
-  await db.write();
+  await query('UPDATE users SET "passwordHash" = $1 WHERE id = $2', [bcrypt.hashSync(newPassword, 10), req.user.id]);
   res.json({ ok: true });
 });
 

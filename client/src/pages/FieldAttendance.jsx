@@ -1,8 +1,24 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { UserPlus, Search, Camera, X, Users, Wallet, RefreshCw, Lock, Pencil } from 'lucide-react'
+import { UserPlus, Search, Camera, X, Users, Wallet, RefreshCw, Lock, Pencil, Download } from 'lucide-react'
 import Layout from '../components/Layout'
 import api from '../api'
 import { useAuth } from '../context/AuthContext'
+
+// Downloads a CSV from the worker-attendance export endpoint — same numbers
+// as the screen, handed over as a file a supervisor or admin can print,
+// exactly like the paper sheets this whole page is modeled on.
+async function downloadCsv(params, fallbackName) {
+  const res = await api.get('/worker-attendance/export', { params, responseType: 'blob' })
+  const disposition = res.headers['content-disposition'] || ''
+  const match = disposition.match(/filename="([^"]+)"/)
+  const filename = match ? match[1] : fallbackName
+  const url = URL.createObjectURL(new Blob([res.data], { type: 'text/csv' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 // Monday-Sunday week containing today — matches the payroll period window.
 function currentWeekRange() {
@@ -508,9 +524,21 @@ export default function FieldAttendance() {
 
       {tab === 'grid' && (
         <>
-          <p className="mb-3 text-sm text-slate-500">
-            {weekStart} – {weekEnd} · tap a box to mark it, same as filling in the paper sheet by hand.
-          </p>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm text-slate-500">
+              {weekStart} – {weekEnd} · tap a box to mark it, same as filling in the paper sheet by hand.
+            </p>
+            <button
+              onClick={() => downloadCsv(
+                { projectId, type: 'weekly-sheet', from: weekStart, to: weekEnd },
+                `weekly-sheet-${projectId}-${weekStart}-to-${weekEnd}.csv`
+              )}
+              disabled={!projectId}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+            >
+              <Download size={13} /> Download Weekly Sheet (CSV)
+            </button>
+          </div>
           <div className="overflow-x-auto surface">
             <table className="w-full border-collapse text-center text-xs">
               <thead className="bg-slate-50 text-slate-500">
@@ -628,6 +656,15 @@ export default function FieldAttendance() {
 
       {tab === 'payroll' && payroll && (
         <>
+          <div className="mb-3 flex justify-end">
+            <button
+              onClick={() => downloadCsv({ projectId, type: 'payroll' }, `payroll-${projectId}.csv`)}
+              disabled={!projectId}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+            >
+              <Download size={13} /> Download Payroll Report (CSV)
+            </button>
+          </div>
           <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div className="surface p-4">
               <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Workers</div>

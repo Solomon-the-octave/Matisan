@@ -1,7 +1,12 @@
 import jwt from 'jsonwebtoken';
-import db from '../db.js';
+import { row } from '../db.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
+if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
+  // A missing secret in production would silently fall back to a public
+  // default — fail loudly instead so this can never ship unnoticed.
+  throw new Error('JWT_SECRET must be set in production');
+}
 
 export function signToken(user) {
   return jwt.sign(
@@ -11,13 +16,13 @@ export function signToken(user) {
   );
 }
 
-export function requireAuth(req, res, next) {
+export async function requireAuth(req, res, next) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (!token) return res.status(401).json({ error: 'Not authenticated' });
   try {
     const payload = jwt.verify(token, JWT_SECRET);
-    const user = db.data.users.find((u) => u.id === payload.id);
+    const user = await row('SELECT * FROM users WHERE id = $1', [payload.id]);
     if (!user) return res.status(401).json({ error: 'User no longer exists' });
     req.user = user;
     next();
