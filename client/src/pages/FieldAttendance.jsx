@@ -115,8 +115,8 @@ export default function FieldAttendance() {
   const [query, setQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [newWorker, setNewWorker] = useState(emptyNewWorker)
-  // OT hours entered at registration — the system works out the OT pay
-  // (Daily Rate / 8 x OT hrs) and it flows straight into payroll.
+  // OT hours entered at registration; the OT pay is worked out by the
+  // system in payroll (Daily Rate / 8 x OT hrs), never shown here.
   const [regOt, setRegOt] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -635,11 +635,6 @@ export default function FieldAttendance() {
                         className="w-14 rounded-md border border-slate-200 dark:border-slate-700 px-1.5 py-1 text-xs disabled:opacity-60"
                       />
                       <span className="text-xs text-slate-400">hrs</span>
-                      {workersById[r.workerId]?.dailyRate && Number(r.otHours) > 0 && (
-                        <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                          = {(Math.round((workersById[r.workerId].dailyRate / 8) * r.otHours * 100) / 100).toLocaleString()} OT pay
-                        </span>
-                      )}
                     </div>
 
                     <span className="ml-auto text-[11px] font-medium text-slate-400">
@@ -1008,12 +1003,6 @@ export default function FieldAttendance() {
                   className="input !w-20 text-center"
                 />
               </label>
-              {Number(regOt) > 0 && mode === 'new' && Number(newWorker.dailyRate) > 0 && (
-                <p className="mt-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                  OT pay = {regOt} hrs x ({Number(newWorker.dailyRate).toLocaleString()} / 8) = {(Math.round((Number(newWorker.dailyRate) / 8) * Number(regOt) * 100) / 100).toLocaleString()}
-                </p>
-              )}
-              <p className="mt-1 text-[11px] text-slate-400">Calculated by the system: Daily Rate / 8 x OT hours, added to payroll.</p>
             </div>
 
             {mode === 'returning' ? (
