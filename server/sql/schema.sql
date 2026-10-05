@@ -187,3 +187,8 @@ CREATE TABLE IF NOT EXISTS attendance_submissions (
   UNIQUE ("projectId", type, "periodStart")
 );
 CREATE INDEX IF NOT EXISTS attendance_submissions_dept_idx ON attendance_submissions (department, status);
+
+-- Per-day adjustment the field team can record: hours missed (arrived late /
+-- left early) and a short note. Payroll deducts lateHours/8 of a day.
+ALTER TABLE worker_attendance ADD COLUMN IF NOT EXISTS "lateHours" double precision NOT NULL DEFAULT 0;
+ALTER TABLE worker_attendance ADD COLUMN IF NOT EXISTS "activityNote" text;

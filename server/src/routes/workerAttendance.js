@@ -8,6 +8,10 @@ import { laborType } from '../laborStructure.js';
 
 const router = Router();
 
+// A day's worth of work: half per Morning/Afternoon marked, less any hours
+// missed (late arrival / early leave) at 1/8 of a day per hour.
+const dayValue = (r) => Math.max(0, (r.am ? 0.5 : 0) + (r.pm ? 0.5 : 0) - (Number(r.lateHours) || 0) / 8);
+
 function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -59,7 +63,7 @@ router.get('/', requireAuth, async (req, res) => {
 // "mark present" tap defaults to a full day (both halves), and either half
 // or the OT hours can be adjusted afterwards from the roster.
 router.post('/', requireAuth, async (req, res) => {
-  const { workerId, projectId, date, am, pm, otHours } = req.body;
+  const { workerId, projectId, date, am, pm, otHours, lateHours, activityNote } = req.body;
   if (!workerId) return res.status(400).json({ error: 'workerId is required' });
 
   const worker = await row('SELECT * FROM workers WHERE id = $1', [workerId]);
@@ -96,8 +100,8 @@ router.post('/', requireAuth, async (req, res) => {
 
   const id = generateId('wa');
   await query(
-    `INSERT INTO worker_attendance (id, "workerId", "projectId", department, date, am, pm, "otHours", "registeredBy", "registeredAt")
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,now())`,
+    `INSERT INTO worker_attendance (id, "workerId", "projectId", department, date, am, pm, "otHours", "registeredBy", "registeredAt", "lateHours", "activityNote")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,now(),$10,$11)`,
     [
       id,
       workerId,
@@ -110,6 +114,8 @@ router.post('/', requireAuth, async (req, res) => {
       pm === undefined ? true : !!pm,
       otHours ? Number(otHours) : 0,
       req.user.id,
+      Math.min(8, Math.max(0, Number(lateHours) || 0)),
+      activityNote ? String(activityNote).slice(0, 200) : null,
     ]
   );
   // Keep the worker's "home" project current so next time they're the
@@ -139,14 +145,21 @@ router.put('/:id', requireAuth, async (req, res) => {
   if (record.projectId && req.user.role === 'employee' && (await findSubmissionLock(record.projectId, record.date))) {
     return res.status(423).json({ error: 'This day was already submitted to your supervisor. Ask them to return it to make changes.' });
   }
-  const { am, pm, otHours } = req.body;
+  const { am, pm, otHours, lateHours, activityNote } = req.body;
+  if (lateHours !== undefined && !(Number(lateHours) >= 0 && Number(lateHours) <= 8)) {
+    return res.status(400).json({ error: 'Hours missed must be between 0 and 8' });
+  }
   await query(
     `UPDATE worker_attendance SET
        am = CASE WHEN $1::boolean THEN $2 ELSE am END,
        pm = CASE WHEN $3::boolean THEN $4 ELSE pm END,
-       "otHours" = CASE WHEN $5::boolean THEN $6 ELSE "otHours" END
-     WHERE id = $7`,
-    [am !== undefined, !!am, pm !== undefined, !!pm, otHours !== undefined, Number(otHours) || 0, record.id]
+       "otHours" = CASE WHEN $5::boolean THEN $6 ELSE "otHours" END,
+       "lateHours" = CASE WHEN $7::boolean THEN $8 ELSE "lateHours" END,
+       "activityNote" = CASE WHEN $9::boolean THEN $10 ELSE "activityNote" END
+     WHERE id = $11`,
+    [am !== undefined, !!am, pm !== undefined, !!pm, otHours !== undefined, Number(otHours) || 0,
+     lateHours !== undefined, Number(lateHours) || 0,
+     activityNote !== undefined, activityNote ? String(activityNote).slice(0, 200) : null, record.id]
   );
   res.json({ attendance: await row('SELECT * FROM worker_attendance WHERE id = $1', [record.id]) });
 });
@@ -180,7 +193,7 @@ async function computePayroll(user, { projectId, from, to } = {}) {
     const prior = byWorker.get(r.workerId) || { days: 0, otHours: 0 };
     // Half a day for Morning, half for Afternoon — same as reading a paper
     // attendance card where AM and PM are marked separately.
-    prior.days += (r.am ? 0.5 : 0) + (r.pm ? 0.5 : 0);
+    prior.days += dayValue(r);
     prior.otHours += r.otHours || 0;
     byWorker.set(r.workerId, prior);
   }
@@ -305,7 +318,7 @@ router.get('/export', requireAuth, async (req, res) => {
       const cells = dates.flatMap((d) => {
         const r = days[d];
         if (r) {
-          totalDays += (r.am ? 0.5 : 0) + (r.pm ? 0.5 : 0);
+          totalDays += dayValue(r);
           totalOT += r.otHours || 0;
         }
         return [r?.am ? '1' : '', r?.pm ? '1' : '', r?.otHours || ''];

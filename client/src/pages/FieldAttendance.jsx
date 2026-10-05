@@ -637,6 +637,31 @@ export default function FieldAttendance() {
                       <span className="text-xs text-slate-400">hrs</span>
                     </div>
 
+                    {/* Late arrival / early leave — hours missed, deducted by the system */}
+                    <div className="flex items-center gap-1">
+                      <label className="text-[10px] font-semibold uppercase text-slate-400" title="Hours missed — arrived late or left early">Late/left</label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="8"
+                        step="0.5"
+                        disabled={rosterLocked}
+                        value={r.lateHours || 0}
+                        onChange={(e) => updateAttendance(r.id, { lateHours: e.target.value })}
+                        className="w-14 rounded-md border border-slate-200 dark:border-slate-700 px-1.5 py-1 text-xs disabled:opacity-60"
+                      />
+                      <span className="text-xs text-slate-400">hrs missed</span>
+                    </div>
+                    <input
+                      type="text"
+                      maxLength={200}
+                      disabled={rosterLocked}
+                      defaultValue={r.activityNote || ''}
+                      onBlur={(e) => { if (e.target.value !== (r.activityNote || '')) updateAttendance(r.id, { activityNote: e.target.value }) }}
+                      placeholder="Note (e.g. arrived late, left early)"
+                      className="input !py-1 text-xs"
+                    />
+
                     <span className="ml-auto text-[11px] font-medium text-slate-400">
                       marked {new Date(r.registeredAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
@@ -705,7 +730,7 @@ export default function FieldAttendance() {
                     (acc, d) => {
                       const r = days[d]
                       if (!r) return acc
-                      acc.days += (r.am ? 0.5 : 0) + (r.pm ? 0.5 : 0)
+                      acc.days += Math.max(0, (r.am ? 0.5 : 0) + (r.pm ? 0.5 : 0) - (r.lateHours || 0) / 8)
                       acc.ot += r.otHours || 0
                       return acc
                     },

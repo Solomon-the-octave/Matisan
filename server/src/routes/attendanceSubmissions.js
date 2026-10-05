@@ -75,7 +75,7 @@ router.post('/', requireAuth, async (req, res) => {
 
   const totals = await row(
     `SELECT count(DISTINCT "workerId")::int AS workers,
-            COALESCE(sum((CASE WHEN am THEN 0.5 ELSE 0 END) + (CASE WHEN pm THEN 0.5 ELSE 0 END)), 0)::float AS days,
+            COALESCE(sum(GREATEST(0, (CASE WHEN am THEN 0.5 ELSE 0 END) + (CASE WHEN pm THEN 0.5 ELSE 0 END) - "lateHours" / 8)), 0)::float AS days,
             COALESCE(sum("otHours"), 0)::float AS ot
      FROM worker_attendance WHERE "projectId" = $1 AND date >= $2 AND date <= $3`,
     [projectId, start, end]
