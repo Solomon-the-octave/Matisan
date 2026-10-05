@@ -145,3 +145,45 @@ CREATE TABLE IF NOT EXISTS payroll_periods (
 CREATE INDEX IF NOT EXISTS tasks_assigned_to_idx ON tasks ("assignedTo");
 CREATE INDEX IF NOT EXISTS workers_department_project_idx ON workers (department, "projectId");
 CREATE INDEX IF NOT EXISTS payroll_periods_project_idx ON payroll_periods ("projectId");
+
+-- Richer project details: planned end date and priority.
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS "endDate" text;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS priority text NOT NULL DEFAULT 'medium';
+
+-- Files attached to a task (stored in Postgres like project documents —
+-- Render's free disk is ephemeral).
+CREATE TABLE IF NOT EXISTS task_documents (
+  id           text PRIMARY KEY,
+  "taskId"     text NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  filename     text NOT NULL,
+  "mimeType"   text NOT NULL,
+  size         integer NOT NULL,
+  data         bytea NOT NULL,
+  "uploadedBy" text REFERENCES users(id),
+  "uploadedAt" timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS task_documents_task_idx ON task_documents ("taskId");
+
+-- Employee -> supervisor hand-in of the attendance registered on a project,
+-- for one day ('daily', periodStart = periodEnd = that date) or a Mon-Sun
+-- week ('weekly'). Supervisor/admin acknowledge it or return it for fixes.
+CREATE TABLE IF NOT EXISTS attendance_submissions (
+  id              text PRIMARY KEY,
+  "projectId"     text NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  department      text NOT NULL REFERENCES departments(id),
+  type            text NOT NULL,
+  "periodStart"   text NOT NULL,
+  "periodEnd"     text NOT NULL,
+  status          text NOT NULL DEFAULT 'submitted',
+  "submittedBy"   text NOT NULL REFERENCES users(id),
+  "submittedAt"   timestamptz NOT NULL DEFAULT now(),
+  "employeeNote"  text,
+  "workerCount"   integer NOT NULL DEFAULT 0,
+  "daysPresent"   double precision NOT NULL DEFAULT 0,
+  "otHours"       double precision NOT NULL DEFAULT 0,
+  "reviewedBy"    text REFERENCES users(id),
+  "reviewedAt"    timestamptz,
+  "reviewNote"    text,
+  UNIQUE ("projectId", type, "periodStart")
+);
+CREATE INDEX IF NOT EXISTS attendance_submissions_dept_idx ON attendance_submissions (department, status);

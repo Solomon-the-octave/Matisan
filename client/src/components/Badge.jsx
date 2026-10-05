@@ -10,6 +10,8 @@ const STYLES = {
   submitted: 'bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400 ring-amber-100 dark:ring-amber-500/25',
   finance_checked: 'bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400 ring-amber-100 dark:ring-amber-500/25',
   approved: 'bg-brand-50 dark:bg-brand-500/15 text-brand-700 dark:text-brand-300 ring-brand-100 dark:ring-brand-500/25',
+  acknowledged: 'bg-brand-50 dark:bg-brand-500/15 text-brand-700 dark:text-brand-300 ring-brand-100 dark:ring-brand-500/25',
+  returned: 'bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 ring-rose-100 dark:ring-rose-500/25',
   pending: 'bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400 ring-amber-100 dark:ring-amber-500/25',
   high: 'bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300 ring-rose-100 dark:ring-rose-500/25',
   medium: 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 ring-slate-200 dark:ring-slate-700',

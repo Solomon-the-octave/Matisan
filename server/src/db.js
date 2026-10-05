@@ -79,8 +79,14 @@ export function generateId(prefix) {
 // by a Postgres sequence so it's safe under concurrent registrations
 // (unlike the old lowdb "count the array" approach).
 export async function generateWorkerId() {
-  const { rows: r } = await pool.query("SELECT nextval('worker_id_seq') AS n");
-  return `WKR-${String(r[0].n).padStart(4, '0')}`;
+  // Skip any ID already taken (e.g. rows inserted with explicit IDs by the
+  // demo seed) so the sequence can never collide with existing workers.
+  for (;;) {
+    const { rows: r } = await pool.query("SELECT nextval('worker_id_seq') AS n");
+    const id = `WKR-${String(r[0].n).padStart(4, '0')}`;
+    const taken = await pool.query('SELECT 1 FROM workers WHERE id = $1', [id]);
+    if (taken.rowCount === 0) return id;
+  }
 }
 
 /** Quick connectivity check used at boot so a bad DATABASE_URL fails fast with a clear message. */

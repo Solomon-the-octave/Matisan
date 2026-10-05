@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { UserPlus, Search, Camera, X, Users, Wallet, RefreshCw, Lock, Pencil, Download } from 'lucide-react'
+import { UserPlus, Search, Camera, X, Users, Wallet, RefreshCw, Lock, Pencil, Download, Send, CheckCircle2, Undo2, Inbox } from 'lucide-react'
+import Badge from '../components/Badge'
 import Layout from '../components/Layout'
 import ScrollHint from '../components/ScrollHint'
 import api from '../api'
@@ -114,10 +115,16 @@ export default function FieldAttendance() {
   const [query, setQuery] = useState('')
   const [searchResults, setSearchResults] = useState([])
   const [newWorker, setNewWorker] = useState(emptyNewWorker)
+  // OT hours entered at registration — the system works out the OT pay
+  // (Daily Rate / 8 x OT hrs) and it flows straight into payroll.
+  const [regOt, setRegOt] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [toast, setToast] = useState('')
   const [weekLocked, setWeekLocked] = useState(false)
+  const [submissions, setSubmissions] = useState([])
+  const [subBusy, setSubBusy] = useState('')
+  const [subNote, setSubNote] = useState('')
 
   const today = new Date().toISOString().slice(0, 10)
   const { weekStart, weekEnd } = useMemo(() => currentWeekRange(), [])
@@ -228,9 +235,49 @@ export default function FieldAttendance() {
     setWeekLocked(!!current)
   }
 
+  async function loadSubmissions(pid) {
+    const res = await api.get('/attendance-submissions', { params: pid ? { projectId: pid } : {} })
+    setSubmissions(res.data.submissions)
+  }
+
+  async function handIn(type) {
+    setSubBusy(type)
+    setError('')
+    try {
+      await api.post('/attendance-submissions', { projectId, type, date: today, note: subNote || undefined })
+      setSubNote('')
+      setToast(type === 'daily' ? "Today's attendance was sent to your supervisor" : "This week's attendance was sent to your supervisor")
+      setTimeout(() => setToast(''), 4000)
+      await loadSubmissions(projectId)
+    } catch (e) {
+      setError(e.response?.data?.error || 'Could not submit attendance')
+    } finally {
+      setSubBusy('')
+    }
+  }
+
+  async function reviewSubmission(sub, action) {
+    let note
+    if (action === 'return') {
+      note = window.prompt('What needs to be fixed? (the team will see this)')
+      if (!note || !note.trim()) return
+    }
+    setSubBusy(sub.id)
+    setError('')
+    try {
+      await api.put(`/attendance-submissions/${sub.id}/${action}`, { note })
+      await loadSubmissions(projectId)
+    } catch (e) {
+      setError(e.response?.data?.error || 'Could not update this submission')
+    } finally {
+      setSubBusy('')
+    }
+  }
+
   useEffect(() => {
     loadProjects()
   }, [])
+
 
   useEffect(() => {
     if (projectId) {
@@ -238,6 +285,7 @@ export default function FieldAttendance() {
       loadPayroll(projectId)
       loadPeriodStatus(projectId)
       loadWeekGrid(projectId)
+      loadSubmissions(projectId)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId])
@@ -254,11 +302,23 @@ export default function FieldAttendance() {
     return () => clearTimeout(t)
   }, [query])
 
+  const isEmployee = user.role === 'employee'
+  const canReview = user.role === 'admin' || user.role === 'supervisor'
+  const dailySub = submissions.find((x) => x.type === 'daily' && x.periodStart === today)
+  const weeklySub = submissions.find((x) => x.type === 'weekly' && x.periodStart === weekStart)
+  // Once a day/week is handed in, the field team can't keep editing it
+  // (the server enforces this too); "returned" unlocks it again.
+  const handedIn = (x) => x && (x.status === 'submitted' || x.status === 'acknowledged')
+  const dateLocked = (d) => isEmployee && submissions.some((x) => handedIn(x) && d >= x.periodStart && d <= x.periodEnd)
+  const rosterLocked = weekLocked || dateLocked(today)
+  const pendingReview = submissions.filter((x) => x.status === 'submitted').length
+
   const currentProject = useMemo(() => projects.find((p) => p.id === projectId), [projects, projectId])
 
   function openModal(initialMode) {
     setMode(initialMode)
     setQuery('')
+    setRegOt('')
     setSearchResults([])
     setNewWorker({ ...emptyNewWorker, department: currentProject?.department || user.department })
     setError('')
@@ -280,7 +340,7 @@ export default function FieldAttendance() {
     setBusy(true)
     setError('')
     try {
-      const res = await api.post('/worker-attendance', { workerId, projectId })
+      const res = await api.post('/worker-attendance', { workerId, projectId, otHours: regOt || 0 })
       setToast(res.data.alreadyRegistered ? `${workerId} was already marked present today` : `${workerId} marked present`)
       setShowModal(false)
       loadRoster(projectId)
@@ -315,7 +375,7 @@ export default function FieldAttendance() {
         projectId,
       })
       const worker = createRes.data.worker
-      await api.post('/worker-attendance', { workerId: worker.id, projectId })
+      await api.post('/worker-attendance', { workerId: worker.id, projectId, otHours: regOt || 0 })
       setToast(`${worker.name} registered as ${worker.id} and marked present`)
       setShowModal(false)
       loadRoster(projectId)
@@ -385,6 +445,13 @@ export default function FieldAttendance() {
         </div>
       )}
 
+      {error && !showModal && (
+        <div className="mb-4 flex items-start justify-between gap-2 rounded-lg bg-rose-50 dark:bg-rose-500/10 px-4 py-2.5 text-sm font-medium text-rose-700 dark:text-rose-300">
+          <span>{error}</span>
+          <button onClick={() => setError('')} className="shrink-0 text-rose-400 hover:text-rose-600"><X size={14} /></button>
+        </div>
+      )}
+
       {weekLocked && (
         <div className="mb-4 flex items-center gap-2 rounded-lg bg-slate-100 dark:bg-slate-700 px-4 py-2.5 text-sm font-semibold text-slate-600 dark:text-slate-300 ring-1 ring-inset ring-slate-200 dark:ring-slate-700">
           <Lock size={14} /> This week has been approved and is locked — attendance can't be changed. Ask an admin to reopen it if something needs fixing.
@@ -433,11 +500,63 @@ export default function FieldAttendance() {
           >
             Payroll
           </button>
+          <button
+            onClick={() => { setTab('submissions'); loadSubmissions(projectId) }}
+            className={`shrink-0 whitespace-nowrap rounded-md px-2.5 py-1.5 sm:px-3 ${tab === 'submissions' ? 'bg-brand-600 text-white' : 'text-slate-500'}`}
+          >
+            Submissions{canReview && pendingReview > 0 ? ` (${pendingReview})` : ''}
+          </button>
         </div>
       </div>
 
       {tab === 'roster' && (
         <>
+          {isEmployee && projectId && (
+            <div className="surface mb-4 p-4">
+              <div className="mb-3 flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200">
+                <Send size={14} /> Hand in to your supervisor
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {[
+                  { type: 'daily', label: "Today's attendance", sub: dailySub },
+                  { type: 'weekly', label: 'This week', sub: weeklySub },
+                ].map(({ type, label, sub }) => (
+                  <div key={type} className="rounded-lg border border-slate-200 dark:border-slate-700 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{label}</span>
+                      {sub && <Badge value={sub.status} />}
+                    </div>
+                    {sub?.status === 'returned' && sub.reviewNote && (
+                      <p className="mt-2 rounded-md bg-rose-50 dark:bg-rose-500/10 px-2 py-1.5 text-xs text-rose-700 dark:text-rose-300">
+                        Returned: {sub.reviewNote}
+                      </p>
+                    )}
+                    {(sub?.status === 'submitted' || sub?.status === 'acknowledged') ? (
+                      <p className="mt-2 text-xs text-slate-400">
+                        {sub.workerCount} workers · {sub.daysPresent} days · {sub.otHours} OT hrs
+                        {sub.status === 'acknowledged' ? ' — received by your supervisor' : ' — waiting for your supervisor'}
+                      </p>
+                    ) : (
+                      <button
+                        onClick={() => handIn(type)}
+                        disabled={subBusy === type || weekLocked}
+                        className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+                      >
+                        <Send size={13} /> {sub?.status === 'returned' ? 'Submit again' : type === 'daily' ? "Submit today's attendance" : 'Submit this week'}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <input
+                value={subNote}
+                onChange={(e) => setSubNote(e.target.value)}
+                maxLength={500}
+                placeholder="Note for your supervisor (optional)"
+                className="input mt-3"
+              />
+            </div>
+          )}
           <div className="mb-4 flex items-center justify-between">
             <p className="text-sm text-slate-500">
               <span className="font-semibold text-slate-700 dark:text-slate-200">{roster.length}</span> worker{roster.length === 1 ? '' : 's'} registered today
@@ -445,7 +564,7 @@ export default function FieldAttendance() {
             </p>
             <button
               onClick={() => openModal('returning')}
-              disabled={!projectId || weekLocked}
+              disabled={!projectId || rosterLocked}
               className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
             >
               <UserPlus size={16} /> Register Worker
@@ -487,7 +606,7 @@ export default function FieldAttendance() {
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => updateAttendance(r.id, { am: !r.am })}
-                        disabled={weekLocked}
+                        disabled={rosterLocked}
                         className={`rounded-md px-2.5 py-1 text-xs font-bold disabled:opacity-60 ${r.am ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'}`}
                         title="Morning"
                       >
@@ -495,7 +614,7 @@ export default function FieldAttendance() {
                       </button>
                       <button
                         onClick={() => updateAttendance(r.id, { pm: !r.pm })}
-                        disabled={weekLocked}
+                        disabled={rosterLocked}
                         className={`rounded-md px-2.5 py-1 text-xs font-bold disabled:opacity-60 ${r.pm ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'}`}
                         title="Afternoon"
                       >
@@ -510,12 +629,17 @@ export default function FieldAttendance() {
                         type="number"
                         min="0"
                         step="0.5"
-                        disabled={weekLocked}
+                        disabled={rosterLocked}
                         value={r.otHours || 0}
                         onChange={(e) => updateAttendance(r.id, { otHours: e.target.value })}
                         className="w-14 rounded-md border border-slate-200 dark:border-slate-700 px-1.5 py-1 text-xs disabled:opacity-60"
                       />
                       <span className="text-xs text-slate-400">hrs</span>
+                      {workersById[r.workerId]?.dailyRate && Number(r.otHours) > 0 && (
+                        <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                          = {(Math.round((workersById[r.workerId].dailyRate / 8) * r.otHours * 100) / 100).toLocaleString()} OT pay
+                        </span>
+                      )}
                     </div>
 
                     <span className="ml-auto text-[11px] font-medium text-slate-400">
@@ -617,7 +741,7 @@ export default function FieldAttendance() {
                           <Fragment key={d}>
                             <td className="border-r border-slate-100 dark:border-slate-800 p-1">
                               <button
-                                disabled={weekLocked}
+                                disabled={weekLocked || dateLocked(d)}
                                 onClick={() => gridCellAction(w.id, d, { am: !(r?.am) })}
                                 className={`h-6 w-6 rounded font-bold disabled:opacity-60 ${r?.am ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' : 'bg-slate-50 dark:bg-slate-800 text-slate-300 dark:text-slate-600 hover:bg-slate-100'}`}
                               >
@@ -626,7 +750,7 @@ export default function FieldAttendance() {
                             </td>
                             <td className="border-r border-slate-100 dark:border-slate-800 p-1">
                               <button
-                                disabled={weekLocked}
+                                disabled={weekLocked || dateLocked(d)}
                                 onClick={() => gridCellAction(w.id, d, { pm: !(r?.pm) })}
                                 className={`h-6 w-6 rounded font-bold disabled:opacity-60 ${r?.pm ? 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' : 'bg-slate-50 dark:bg-slate-800 text-slate-300 dark:text-slate-600 hover:bg-slate-100'}`}
                               >
@@ -638,7 +762,7 @@ export default function FieldAttendance() {
                                 type="number"
                                 min="0"
                                 step="0.5"
-                                disabled={weekLocked}
+                                disabled={weekLocked || dateLocked(d)}
                                 defaultValue={r?.otHours || ''}
                                 onBlur={(e) => {
                                   const val = e.target.value
@@ -660,6 +784,85 @@ export default function FieldAttendance() {
                   <tr>
                     <td colSpan={5 + weekDates.length * 3} className="px-4 py-10 text-center text-sm text-slate-400">
                       No workers on this project yet — register one from Today's Roster first.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+
+      {tab === 'submissions' && (
+        <>
+          <p className="mb-3 text-sm text-slate-500">
+            {canReview
+              ? 'Attendance your teams have handed in. Acknowledge it when it looks right, or return it with a note.'
+              : 'Everything you have handed in, and what your supervisor did with it.'}
+          </p>
+          <ScrollHint />
+          <div className="overflow-x-auto surface">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-slate-50 dark:bg-slate-800 text-xs font-semibold uppercase text-slate-400">
+                <tr>
+                  <th className="px-4 py-3">Period</th>
+                  <th className="px-4 py-3">Handed in by</th>
+                  <th className="px-4 py-3">Totals</th>
+                  <th className="px-4 py-3">Status</th>
+                  {canReview && <th className="px-4 py-3"></th>}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {submissions.map((x) => (
+                  <tr key={x.id}>
+                    <td className="px-4 py-3">
+                      <div className="font-semibold text-slate-700 dark:text-slate-200">
+                        {x.type === 'daily' ? `Day · ${x.periodStart}` : `Week · ${x.periodStart} – ${x.periodEnd}`}
+                      </div>
+                      <div className="text-xs text-slate-400">{x.projectName}</div>
+                    </td>
+                    <td className="px-4 py-3 text-slate-500">
+                      <div>{x.submittedByName}</div>
+                      <div className="text-xs text-slate-400">{new Date(x.submittedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+                      {x.employeeNote && <div className="mt-0.5 max-w-xs text-xs italic text-slate-400">“{x.employeeNote}”</div>}
+                    </td>
+                    <td className="px-4 py-3 text-slate-500">
+                      {x.workerCount} workers · {x.daysPresent} days · {x.otHours} OT hrs
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge value={x.status} />
+                      {x.reviewedByName && <div className="mt-0.5 text-[11px] text-slate-400">by {x.reviewedByName}</div>}
+                      {x.reviewNote && <div className="mt-0.5 max-w-xs text-xs text-slate-400">{x.reviewNote}</div>}
+                    </td>
+                    {canReview && (
+                      <td className="px-4 py-3 text-right">
+                        {x.status === 'submitted' && (
+                          <div className="flex justify-end gap-2">
+                            <button
+                              onClick={() => reviewSubmission(x, 'acknowledge')}
+                              disabled={subBusy === x.id}
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+                            >
+                              <CheckCircle2 size={13} /> Acknowledge
+                            </button>
+                            <button
+                              onClick={() => reviewSubmission(x, 'return')}
+                              disabled={subBusy === x.id}
+                              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-60"
+                            >
+                              <Undo2 size={13} /> Return
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+                {submissions.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-10 text-center text-sm text-slate-400">
+                      <Inbox className="mx-auto mb-1 text-slate-300 dark:text-slate-600" size={22} />
+                      Nothing handed in yet
                     </td>
                   </tr>
                 )}
@@ -729,6 +932,7 @@ export default function FieldAttendance() {
                   <th className="px-4 py-3">Daily Rate</th>
                   <th className="px-4 py-3">Days</th>
                   <th className="px-4 py-3">OT Hrs</th>
+                  <th className="px-4 py-3">OT Pay</th>
                   <th className="px-4 py-3">Total</th>
                   <th className="px-4 py-3">Account</th>
                 </tr>
@@ -749,6 +953,7 @@ export default function FieldAttendance() {
                     <td className="px-4 py-3 text-slate-500">{p.dailyRate ?? '-'}</td>
                     <td className="px-4 py-3 text-slate-500">{p.daysPresent}</td>
                     <td className="px-4 py-3 text-slate-500">{p.otHours || 0}</td>
+                    <td className="px-4 py-3 text-slate-500">{p.otPay != null ? p.otPay.toLocaleString() : '-'}</td>
                     <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-200">{p.total != null ? p.total.toLocaleString() : '-'}</td>
                     <td className="px-4 py-3 text-xs text-slate-400">{p.bankAccount || '-'}</td>
                   </tr>
@@ -788,6 +993,28 @@ export default function FieldAttendance() {
             </div>
 
             {error && <p className="mb-3 text-sm font-medium text-rose-600 dark:text-rose-400">{error}</p>}
+
+            <div className="mb-3 rounded-lg bg-slate-50 dark:bg-slate-800 p-3">
+              <label className="flex items-center justify-between gap-3 text-xs font-semibold text-slate-500">
+                <span>Overtime hours today (optional)</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="16"
+                  step="0.5"
+                  placeholder="0"
+                  value={regOt}
+                  onChange={(e) => setRegOt(e.target.value)}
+                  className="input !w-20 text-center"
+                />
+              </label>
+              {Number(regOt) > 0 && mode === 'new' && Number(newWorker.dailyRate) > 0 && (
+                <p className="mt-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                  OT pay = {regOt} hrs x ({Number(newWorker.dailyRate).toLocaleString()} / 8) = {(Math.round((Number(newWorker.dailyRate) / 8) * Number(regOt) * 100) / 100).toLocaleString()}
+                </p>
+              )}
+              <p className="mt-1 text-[11px] text-slate-400">Calculated by the system: Daily Rate / 8 x OT hours, added to payroll.</p>
+            </div>
 
             {mode === 'returning' ? (
               <div>

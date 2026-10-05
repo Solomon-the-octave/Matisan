@@ -5,7 +5,13 @@ import Badge from '../components/Badge'
 import api from '../api'
 import { useAuth } from '../context/AuthContext'
 
-const emptyForm = { name: '', site: '', department: '', description: '' }
+const today = () => new Date().toISOString().slice(0, 10)
+const emptyForm = { name: '', site: '', department: '', description: '', managerId: '', priority: 'medium', startDate: today(), endDate: '' }
+const PRIORITY_STYLE = {
+  high: 'bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300',
+  medium: 'bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300',
+  low: 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300',
+}
 
 function formatBytes(n) {
   if (n < 1024) return `${n} B`
@@ -24,9 +30,12 @@ export default function Projects() {
   const [docsFor, setDocsFor] = useState(null) // project whose documents panel is open
   const [docsByProject, setDocsByProject] = useState({})
   const [uploadingFor, setUploadingFor] = useState(null)
+  const [pendingFiles, setPendingFiles] = useState([])
+  const [saving, setSaving] = useState(false)
+  const [formError, setFormError] = useState('')
   const fileInputs = useRef({})
   const canManage = user.role === 'admin' || user.role === 'supervisor'
-  const canUploadDocs = user.role === 'admin'
+  const canUploadDocs = canManage
 
   async function load() {
     const calls = [api.get('/projects'), api.get('/departments')]
@@ -96,13 +105,53 @@ export default function Projects() {
   }, [user])
 
   const deptName = (id) => departments.find((d) => d.id === id)?.name || id
+  const userName = (id) => users.find((u) => u.id === id)?.name
+  const managersFor = (dept) => users.filter((u) => ['supervisor', 'admin'].includes(u.role) && (u.isGlobalAdmin || u.department === dept))
 
   async function submit(e) {
     e.preventDefault()
-    await api.post('/projects', form)
-    setForm({ ...emptyForm, department: user.isGlobalAdmin ? '' : user.department })
-    setShowForm(false)
-    load()
+    setFormError('')
+    setSaving(true)
+    try {
+      const payload = { ...form, managerId: form.managerId || undefined, endDate: form.endDate || undefined }
+      const res = await api.post('/projects', payload)
+      const failed = []
+      for (const file of pendingFiles) {
+        const fd = new FormData()
+        fd.append('file', file)
+        try {
+          await api.post(`/projects/${res.data.project.id}/documents`, fd)
+        } catch {
+          failed.push(file.name)
+        }
+      }
+      setForm({ ...emptyForm, department: user.isGlobalAdmin ? '' : user.department })
+      setPendingFiles([])
+      setShowForm(false)
+      await load()
+      if (failed.length) alert(`Project created, but these files didn't upload: ${failed.join(', ')}. Add them from the Documents panel.`)
+    } catch (err) {
+      setFormError(err.response?.data?.error || 'Could not create the project')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function changeManager(id, managerId) {
+    try {
+      await api.put(`/projects/${id}`, { managerId })
+      load()
+    } catch (err) {
+      alert(err.response?.data?.error || 'Could not change the responsible person')
+    }
+  }
+
+  function addPendingFiles(fileList) {
+    // Copy out of the live FileList first — the input is cleared right after.
+    const files = [...fileList]
+    const tooBig = files.filter((f) => f.size > 15 * 1024 * 1024)
+    if (tooBig.length) alert(`Too large (15MB max): ${tooBig.map((f) => f.name).join(', ')}`)
+    setPendingFiles((cur) => [...cur, ...files.filter((f) => f.size <= 15 * 1024 * 1024)])
   }
 
   async function updateStatus(id, status) {
@@ -135,9 +184,37 @@ export default function Projects() {
                   <MapPin size={12} /> {p.site || 'No site set'} · {deptName(p.department)}
                 </p>
               </div>
-              <Badge value={p.status} />
+              <div className="flex shrink-0 flex-col items-end gap-1">
+                <Badge value={p.status} />
+                {p.priority && (
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold capitalize ${PRIORITY_STYLE[p.priority] || PRIORITY_STYLE.medium}`}>
+                    {p.priority} priority
+                  </span>
+                )}
+              </div>
             </div>
             <p className="mt-3 text-sm text-slate-500">{p.description}</p>
+            <dl className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-1 text-xs">
+              <dt className="text-slate-400">Starts</dt>
+              <dd className="text-right text-slate-600 dark:text-slate-300">{p.startDate || '-'}</dd>
+              <dt className="text-slate-400">Planned finish</dt>
+              <dd className="text-right text-slate-600 dark:text-slate-300">{p.endDate || '-'}</dd>
+              <dt className="text-slate-400">Responsible</dt>
+              <dd className="flex min-w-0 justify-end text-right text-slate-600 dark:text-slate-300">
+                {canManage ? (
+                  <select
+                    value={p.managerId || ''}
+                    onChange={(e) => changeManager(p.id, e.target.value)}
+                    className="input !w-auto max-w-full !py-0.5 text-xs"
+                  >
+                    {!managersFor(p.department).some((u) => u.id === p.managerId) && <option value={p.managerId || ''}>{userName(p.managerId) || 'Unassigned'}</option>}
+                    {managersFor(p.department).map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                  </select>
+                ) : (
+                  p.managerName || '-'
+                )}
+              </dd>
+            </dl>
             <div className="mt-4">
               <div className="mb-1 flex justify-between text-xs font-medium text-slate-400">
                 <span>Progress</span><span>{p.progress}%</span>
@@ -200,7 +277,7 @@ export default function Projects() {
               </div>
             )}
 
-            {canManage && (
+            {(canManage || p.assignedEmployees?.includes(user.id)) && (
               <div className="mt-3 border-t border-slate-100 dark:border-slate-800 pt-3">
                 <button
                   onClick={() => toggleDocs(p.id)}
@@ -262,7 +339,7 @@ export default function Projects() {
 
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white dark:bg-slate-900 p-5 shadow-xl">
+          <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white dark:bg-slate-900 p-5 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">New Project</h3>
               <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"><X size={18} /></button>
@@ -270,18 +347,76 @@ export default function Projects() {
             <form onSubmit={submit} className="space-y-3">
               <input required placeholder="Project name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="input" />
               <input placeholder="Site / location" value={form.site} onChange={(e) => setForm({ ...form, site: e.target.value })} className="input" />
-              <select
-                required
-                disabled={!user.isGlobalAdmin}
-                value={form.department}
-                onChange={(e) => setForm({ ...form, department: e.target.value })}
-                className="input"
-              >
-                <option value="">Select department...</option>
-                {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-              </select>
-              <textarea placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="input" rows={3} />
-              <button type="submit" className="w-full rounded-lg bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">Create Project</button>
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-slate-500">Department</span>
+                <select
+                  required
+                  disabled={!user.isGlobalAdmin}
+                  value={form.department}
+                  onChange={(e) => setForm({ ...form, department: e.target.value, managerId: '' })}
+                  className="input"
+                >
+                  <option value="">Select department...</option>
+                  {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-slate-500">Responsible person</span>
+                <select
+                  value={form.managerId}
+                  disabled={!form.department}
+                  onChange={(e) => setForm({ ...form, managerId: e.target.value })}
+                  className="input"
+                >
+                  <option value="">{form.department ? `Me (${user.name})` : 'Pick a department first'}</option>
+                  {managersFor(form.department).filter((u) => u.id !== user.id).map((u) => (
+                    <option key={u.id} value={u.id}>{u.name} — {u.role}</option>
+                  ))}
+                </select>
+              </label>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold text-slate-500">Priority</span>
+                  <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })} className="input">
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold text-slate-500">Start date</span>
+                  <input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} className="input" />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold text-slate-500">Planned finish</span>
+                  <input type="date" min={form.startDate} value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} className="input" />
+                </label>
+              </div>
+              <textarea placeholder="Description, scope, notes" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="input" rows={3} />
+
+              <div>
+                <span className="mb-1 block text-xs font-semibold text-slate-500">Attachments (permits, drawings, scope — 15MB each)</span>
+                <div className="space-y-1">
+                  {pendingFiles.map((f, idx) => (
+                    <div key={`${f.name}-${idx}`} className="flex items-center justify-between gap-2 rounded-md bg-slate-50 dark:bg-slate-800 px-2 py-1.5 text-xs">
+                      <span className="truncate text-slate-600 dark:text-slate-300">{f.name}</span>
+                      <span className="flex shrink-0 items-center gap-2 text-slate-400">
+                        {formatBytes(f.size)}
+                        <button type="button" onClick={() => setPendingFiles((cur) => cur.filter((_, i) => i !== idx))} className="hover:text-rose-500" title="Remove"><X size={13} /></button>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <label className="mt-1 flex cursor-pointer items-center justify-center gap-1.5 rounded-md border border-dashed border-slate-200 dark:border-slate-700 px-2 py-2.5 text-xs font-medium text-slate-500 dark:text-slate-400 hover:border-brand-300 hover:text-brand-600 dark:hover:text-brand-400">
+                  <Upload size={13} /> Attach files
+                  <input type="file" multiple className="hidden" onChange={(e) => { addPendingFiles(e.target.files); e.target.value = '' }} />
+                </label>
+              </div>
+
+              {formError && <p className="text-sm font-medium text-rose-600 dark:text-rose-400">{formError}</p>}
+              <button type="submit" disabled={saving} className="w-full rounded-lg bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
+                {saving ? 'Creating...' : 'Create Project'}
+              </button>
             </form>
           </div>
         </div>

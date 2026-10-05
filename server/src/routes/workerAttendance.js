@@ -3,6 +3,7 @@ import { rows, row, query, generateId } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { canAccessProject } from './projects.js';
 import { findLockedPeriod } from './payrollPeriods.js';
+import { findSubmissionLock } from './attendanceSubmissions.js';
 import { laborType } from '../laborStructure.js';
 
 const router = Router();
@@ -85,6 +86,9 @@ router.post('/', requireAuth, async (req, res) => {
   if (effectiveProjectId && !req.user.isGlobalAdmin && (await findLockedPeriod(effectiveProjectId, day))) {
     return res.status(423).json({ error: 'This week has been approved and is locked. Ask an admin to reopen it.' });
   }
+  if (effectiveProjectId && req.user.role === 'employee' && (await findSubmissionLock(effectiveProjectId, day))) {
+    return res.status(423).json({ error: 'This day was already submitted to your supervisor. Ask them to return it to make changes.' });
+  }
   const existing = await row('SELECT * FROM worker_attendance WHERE "workerId" = $1 AND date = $2', [workerId, day]);
   if (existing) {
     return res.json({ attendance: existing, alreadyRegistered: true });
@@ -131,6 +135,9 @@ router.put('/:id', requireAuth, async (req, res) => {
   }
   if (record.projectId && !req.user.isGlobalAdmin && (await findLockedPeriod(record.projectId, record.date))) {
     return res.status(423).json({ error: 'This week has been approved and is locked. Ask an admin to reopen it.' });
+  }
+  if (record.projectId && req.user.role === 'employee' && (await findSubmissionLock(record.projectId, record.date))) {
+    return res.status(423).json({ error: 'This day was already submitted to your supervisor. Ask them to return it to make changes.' });
   }
   const { am, pm, otHours } = req.body;
   await query(
@@ -187,9 +194,9 @@ async function computePayroll(user, { projectId, from, to } = {}) {
     .map((w) => {
       const { days: daysPresent, otHours } = byWorker.get(w.id) || { days: 0, otHours: 0 };
       const hourlyRate = w.dailyRate ? w.dailyRate / 8 : null;
-      // OT paid at 1.5x the base hourly rate — standard OT premium; adjust
-      // here if the company's policy differs.
-      const otPay = hourlyRate ? Math.round(hourlyRate * 1.5 * otHours * 100) / 100 : 0;
+      // Matisan's payroll formula:
+      //   Total = (Days x Daily Rate) + (OT Hrs x (Daily Rate / 8))
+      const otPay = hourlyRate ? Math.round(hourlyRate * otHours * 100) / 100 : 0;
       const basePay = w.dailyRate ? Math.round(w.dailyRate * daysPresent * 100) / 100 : null;
       return {
         workerId: w.id,
@@ -200,6 +207,8 @@ async function computePayroll(user, { projectId, from, to } = {}) {
         bankAccount: w.bankAccount || null,
         daysPresent,
         otHours,
+        basePay,
+        otPay: w.dailyRate ? otPay : null,
         total: basePay != null ? Math.round((basePay + otPay) * 100) / 100 : null,
       };
     })
@@ -323,7 +332,7 @@ router.get('/export', requireAuth, async (req, res) => {
   payroll.forEach((p, i) => {
     const hourlyRate = p.dailyRate ? Math.round((p.dailyRate / 8) * 100) / 100 : '';
     const grossEarning = p.dailyRate ? Math.round(p.dailyRate * p.daysPresent * 100) / 100 : '';
-    const otEarning = p.dailyRate && p.otHours ? Math.round((p.dailyRate / 8) * 1.5 * p.otHours * 100) / 100 : '';
+    const otEarning = p.dailyRate && p.otHours ? Math.round((p.dailyRate / 8) * p.otHours * 100) / 100 : '';
     lines.push([
       i + 1, p.name, p.trade || '', p.laborType, p.daysPresent, p.dailyRate ?? '',
       grossEarning, p.otHours || '', hourlyRate, otEarning, p.total ?? '', p.bankAccount || '',

@@ -20,6 +20,7 @@ export default function Dashboard() {
   const [payrollPeriods, setPayrollPeriods] = useState([])
   const [sitePayroll, setSitePayroll] = useState(null)
   const [signingId, setSigningId] = useState(null)
+  const [handedIn, setHandedIn] = useState([])
 
   async function load() {
     const today = new Date().toISOString().slice(0, 10)
@@ -28,11 +29,18 @@ export default function Dashboard() {
       api.get('/projects'),
       api.get('/tasks'),
     ]
+    const wantsSubmissions = user.role === 'admin' || user.role === 'supervisor'
+    if (wantsSubmissions) calls.push(api.get('/attendance-submissions', { params: { status: 'submitted' } }))
     if (user.role === 'admin') {
       calls.push(api.get('/payroll-periods'))
       calls.push(api.get('/worker-attendance/payroll', { params: { from: today, to: today } }))
     }
-    const [s, p, t, pp, site] = await Promise.all(calls)
+    const results = await Promise.all(calls)
+    const [s, p, t] = results
+    let i = 3
+    if (wantsSubmissions) setHandedIn(results[i++].data.submissions)
+    const pp = user.role === 'admin' ? results[i++] : undefined
+    const site = user.role === 'admin' ? results[i++] : undefined
     setSummary(s.data)
     setProjects(p.data.projects)
     setTasks(t.data.tasks)
@@ -115,6 +123,25 @@ export default function Dashboard() {
           <StatCard label="Active Projects" value={summary.activeProjects} icon={CheckCircle2} />
           <StatCard label="Pending Tasks" value={summary.pendingTasks} icon={ClipboardList} />
           <StatCard label="Attendance Today" value={summary.attendanceToday} icon={CalendarCheck} />
+        </div>
+
+        <div className="mt-6 surface p-4 shadow-sm">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Attendance handed in by the field team</h3>
+            <button onClick={() => navigate('/field-attendance')} className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline">Review</button>
+          </div>
+          {handedIn.length === 0 ? (
+            <p className="py-4 text-center text-sm text-slate-400">Nothing waiting for review.</p>
+          ) : (
+            handedIn.slice(0, 5).map((x) => (
+              <ListRow
+                key={x.id}
+                title={`${x.projectName} · ${x.type === 'daily' ? x.periodStart : `week of ${x.periodStart}`}`}
+                subtitle={`${x.submittedByName} · ${x.workerCount} workers · ${x.daysPresent} days · ${x.otHours} OT hrs`}
+                right={<Badge value="submitted" />}
+              />
+            ))
+          )}
         </div>
 
         {/* Field attendance / payroll performance — the system this whole
@@ -204,6 +231,25 @@ export default function Dashboard() {
           <StatCard label="Tasks to Review" value={summary.tasksToReview} icon={ClipboardList} />
           <StatCard label="Pending Attendance" value={summary.pendingAttendance} icon={Clock} />
         </div>
+        <div className="mt-6 surface p-4 shadow-sm">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Attendance handed in by the field team</h3>
+            <button onClick={() => navigate('/field-attendance')} className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline">Review</button>
+          </div>
+          {handedIn.length === 0 ? (
+            <p className="py-4 text-center text-sm text-slate-400">Nothing waiting for review.</p>
+          ) : (
+            handedIn.slice(0, 5).map((x) => (
+              <ListRow
+                key={x.id}
+                title={`${x.projectName} · ${x.type === 'daily' ? x.periodStart : `week of ${x.periodStart}`}`}
+                subtitle={`${x.submittedByName} · ${x.workerCount} workers · ${x.daysPresent} days · ${x.otHours} OT hrs`}
+                right={<Badge value="submitted" />}
+              />
+            ))
+          )}
+        </div>
+
         <div className="mt-6 surface p-4 shadow-sm">
           <h3 className="mb-3 text-sm font-bold text-slate-700 dark:text-slate-200">Tasks Requiring Attention</h3>
           {attention.length === 0 ? (
