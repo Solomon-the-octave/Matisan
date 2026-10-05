@@ -63,6 +63,9 @@ router.get('/', requireAuth, async (req, res) => {
 // "mark present" tap defaults to a full day (both halves), and either half
 // or the OT hours can be adjusted afterwards from the roster.
 router.post('/', requireAuth, async (req, res) => {
+  if (req.user.role !== 'employee' && !req.user.isGlobalAdmin) {
+    return res.status(403).json({ error: 'Attendance is recorded by the field team. Return the submission to have it corrected.' });
+  }
   const { workerId, projectId, date, am, pm, otHours, lateHours, activityNote } = req.body;
   if (!workerId) return res.status(400).json({ error: 'workerId is required' });
 
@@ -128,6 +131,9 @@ router.post('/', requireAuth, async (req, res) => {
 // Adjust an existing day's record — toggle Morning/Afternoon or log OT
 // hours, the same correction a foreman would make by hand on the card.
 router.put('/:id', requireAuth, async (req, res) => {
+  if (req.user.role !== 'employee' && !req.user.isGlobalAdmin) {
+    return res.status(403).json({ error: 'Attendance is recorded by the field team. Return the submission to have it corrected.' });
+  }
   const record = await row('SELECT * FROM worker_attendance WHERE id = $1', [req.params.id]);
   if (!record) return res.status(404).json({ error: 'Attendance record not found' });
   if (!req.user.isGlobalAdmin && record.department !== req.user.department) {

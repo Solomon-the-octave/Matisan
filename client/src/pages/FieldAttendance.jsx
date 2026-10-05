@@ -309,8 +309,11 @@ export default function FieldAttendance() {
   // Once a day/week is handed in, the field team can't keep editing it
   // (the server enforces this too); "returned" unlocks it again.
   const handedIn = (x) => x && (x.status === 'submitted' || x.status === 'acknowledged')
-  const dateLocked = (d) => isEmployee && submissions.some((x) => handedIn(x) && d >= x.periodStart && d <= x.periodEnd)
-  const rosterLocked = weekLocked || dateLocked(today)
+  // The field team (employees) records and hands in attendance; supervisors
+  // and admin only review it, so for them everything here is view-only.
+  const readOnly = !isEmployee
+  const dateLocked = (d) => readOnly || submissions.some((x) => handedIn(x) && d >= x.periodStart && d <= x.periodEnd)
+  const rosterLocked = weekLocked || dateLocked(today)  // dateLocked covers read-only
   const pendingReview = submissions.filter((x) => x.status === 'submitted').length
 
   const currentProject = useMemo(() => projects.find((p) => p.id === projectId), [projects, projectId])
@@ -557,18 +560,25 @@ export default function FieldAttendance() {
               />
             </div>
           )}
+          {readOnly && (
+            <p className="mb-3 rounded-lg bg-slate-100 dark:bg-slate-800 px-3 py-2 text-xs font-medium text-slate-500">
+              View only — the field team registers workers, records hours and submits attendance. Review what they hand in under Submissions.
+            </p>
+          )}
           <div className="mb-4 flex items-center justify-between">
             <p className="text-sm text-slate-500">
               <span className="font-semibold text-slate-700 dark:text-slate-200">{roster.length}</span> worker{roster.length === 1 ? '' : 's'} registered today
               {currentProject ? ` on ${currentProject.name}` : ''}
             </p>
-            <button
-              onClick={() => openModal('returning')}
-              disabled={!projectId || rosterLocked}
-              className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
-            >
-              <UserPlus size={16} /> Register Worker
-            </button>
+            {!readOnly && (
+              <button
+                onClick={() => openModal('returning')}
+                disabled={!projectId || rosterLocked}
+                className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+              >
+                <UserPlus size={16} /> Register Worker
+              </button>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -587,13 +597,15 @@ export default function FieldAttendance() {
                           <span className="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{w.name}</span>
                           <span className="shrink-0 rounded-full bg-slate-100 dark:bg-slate-700 px-2 py-0.5 text-[10px] font-bold text-slate-500">{w.id}</span>
                         </div>
-                        <button
+                        {!readOnly && (
+                          <button
                           onClick={() => openEditWorker(w)}
                           title="Edit worker details"
                           className="shrink-0 rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:text-slate-300"
                         >
                           <Pencil size={14} />
                         </button>
+                          )}
                       </div>
                       <p className="truncate text-xs text-slate-400">{w.trade || 'Worker'}{w.phone ? ` · ${w.phone}` : ''}{w.bankAccount ? ` · Acct ${w.bankAccount}` : ''}</p>
                     </div>
@@ -745,13 +757,15 @@ export default function FieldAttendance() {
                             <div className="font-semibold text-slate-700 dark:text-slate-200">{w.name}</div>
                             <div className="text-[10px] text-slate-400">{w.id}</div>
                           </div>
-                          <button
+                          {!readOnly && (
+                            <button
                             onClick={() => openEditWorker(w)}
                             title="Edit worker details"
                             className="shrink-0 rounded p-1 text-slate-300 dark:text-slate-600 hover:bg-slate-100 hover:text-slate-600 dark:hover:text-slate-300"
                           >
                             <Pencil size={12} />
                           </button>
+                            )}
                         </div>
                       </td>
                       <td className="border-r border-slate-200 dark:border-slate-700 px-3 py-2 text-left text-slate-500">{w.trade || '-'}</td>

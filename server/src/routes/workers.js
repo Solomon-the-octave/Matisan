@@ -58,6 +58,9 @@ router.get('/:id', requireAuth, async (req, res) => {
 // Register a brand-new day worker. Any authenticated staff member (the
 // on-site registrar) can do this for their own department; admins for any.
 router.post('/', requireAuth, async (req, res) => {
+  if (req.user.role !== 'employee' && !req.user.isGlobalAdmin) {
+    return res.status(403).json({ error: 'Workers are registered by the field team' });
+  }
   const { name, trade, phone, photo, dailyRate, bankAccount, department, projectId } = req.body;
   if (!name || !department) return res.status(400).json({ error: 'name and department are required' });
   if (!req.user.isGlobalAdmin && department !== req.user.department) {
@@ -98,6 +101,9 @@ router.post('/', requireAuth, async (req, res) => {
 });
 
 router.put('/:id', requireAuth, async (req, res) => {
+  if (req.user.role !== 'employee' && !req.user.isGlobalAdmin) {
+    return res.status(403).json({ error: 'Workers are registered by the field team' });
+  }
   const worker = await row('SELECT * FROM workers WHERE id = $1', [req.params.id]);
   if (!worker) return res.status(404).json({ error: 'Worker not found' });
   if (!req.user.isGlobalAdmin && worker.department !== req.user.department) {
