@@ -4,13 +4,18 @@ import { Building2, HardHat, Ruler, ArrowRight } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 export default function Login() {
-  const { user, login } = useAuth()
+  const { user, login, loading: checkingSession } = useAuth()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  // Wait until the saved session has been checked with the server, so the page
+  // and the address bar never disagree.
+  if (checkingSession) {
+    return <div className="flex h-screen items-center justify-center text-slate-400">Loading...</div>
+  }
   if (user) return <Navigate to="/dashboard" replace />
 
   async function handleSubmit(e) {
@@ -19,7 +24,7 @@ export default function Login() {
     setLoading(true)
     try {
       await login(email, password)
-      navigate('/dashboard')
+      navigate('/dashboard', { replace: true })
     } catch (err) {
       setError(err.response?.data?.error || 'Unable to sign in. Please try again.')
     } finally {

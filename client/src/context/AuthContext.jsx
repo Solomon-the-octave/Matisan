@@ -1,18 +1,18 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import api from '../api'
+import { getToken, getStoredUser, saveSession, saveUser, clearSession, purgeLegacySession } from '../authStorage'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    const raw = localStorage.getItem('matisan_user')
-    return raw ? JSON.parse(raw) : null
-  })
-  const [loading, setLoading] = useState(true)
+  // Restore this tab's own session. Without a token there is nothing to check.
+  const [user, setUser] = useState(() => (getToken() ? getStoredUser() : null))
+  const [loading, setLoading] = useState(() => !!getToken())
 
   useEffect(() => {
-    const token = localStorage.getItem('matisan_token')
-    if (!token) {
+    purgeLegacySession()
+    if (!getToken()) {
+      setUser(null)
       setLoading(false)
       return
     }
@@ -20,11 +20,10 @@ export function AuthProvider({ children }) {
       .get('/auth/me')
       .then((res) => {
         setUser(res.data.user)
-        localStorage.setItem('matisan_user', JSON.stringify(res.data.user))
+        saveUser(res.data.user)
       })
       .catch(() => {
-        localStorage.removeItem('matisan_token')
-        localStorage.removeItem('matisan_user')
+        clearSession()
         setUser(null)
       })
       .finally(() => setLoading(false))
@@ -32,15 +31,13 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (email, password) => {
     const res = await api.post('/auth/login', { email, password })
-    localStorage.setItem('matisan_token', res.data.token)
-    localStorage.setItem('matisan_user', JSON.stringify(res.data.user))
+    saveSession(res.data.token, res.data.user)
     setUser(res.data.user)
     return res.data.user
   }, [])
 
   const logout = useCallback(() => {
-    localStorage.removeItem('matisan_token')
-    localStorage.removeItem('matisan_user')
+    clearSession()
     setUser(null)
   }, [])
 
