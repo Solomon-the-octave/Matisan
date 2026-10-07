@@ -336,3 +336,6 @@ CREATE TABLE IF NOT EXISTS notifications (
   "createdAt" timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS notifications_user_idx ON notifications ("userId", "createdAt" DESC);
+
+-- Deactivated users keep their history but cannot sign in or hold seats.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS "isActive" boolean NOT NULL DEFAULT true;

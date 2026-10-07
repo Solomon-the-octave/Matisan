@@ -24,6 +24,7 @@ export async function requireAuth(req, res, next) {
     const payload = jwt.verify(token, JWT_SECRET);
     const user = await row('SELECT * FROM users WHERE id = $1', [payload.id]);
     if (!user) return res.status(401).json({ error: 'User no longer exists' });
+    if (user.isActive === false) return res.status(401).json({ error: 'This account has been deactivated' });
     req.user = user;
     next();
   } catch (err) {

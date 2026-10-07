@@ -13,9 +13,11 @@ router.get('/', requireAuth, async (req, res) => {
   if (!req.user.isGlobalAdmin && req.user.role === 'employee') {
     return res.status(403).json({ error: 'Not authorized' });
   }
+  // Deactivated people are hidden from pickers; the Users page asks for them.
+  const inactive = req.query.includeInactive === '1' && req.user.role === 'admin' ? '' : 'AND "isActive" = true';
   const users = req.user.isGlobalAdmin
-    ? await rows('SELECT * FROM users ORDER BY name')
-    : await rows('SELECT * FROM users WHERE department = $1 ORDER BY name', [req.user.department]);
+    ? await rows(`SELECT * FROM users WHERE true ${inactive} ORDER BY name`)
+    : await rows(`SELECT * FROM users WHERE department = $1 ${inactive} ORDER BY name`, [req.user.department]);
   res.json({ users: users.map(publicUser) });
 });
 
@@ -104,6 +106,37 @@ router.put('/:id', requireAuth, requireRole('admin', 'supervisor'), async (req, 
   );
   const updated = await row('SELECT * FROM users WHERE id = $1', [target.id]);
   res.json({ user: publicUser(updated) });
+});
+
+// Switch a person off without losing their history: they can't sign in, and
+// they leave every seat, team and Project Manager role so nothing waits on them.
+router.put('/:id/deactivate', requireAuth, requireRole('admin'), async (req, res) => {
+  const target = await row('SELECT id, name, "isGlobalAdmin" FROM users WHERE id = $1', [req.params.id]);
+  if (!target) return res.status(404).json({ error: 'User not found' });
+  if (target.isGlobalAdmin) return res.status(403).json({ error: 'The main administrator cannot be deactivated' });
+  if (target.id === req.user.id) return res.status(403).json({ error: 'You cannot deactivate your own account' });
+  const seats = await withTransaction(async (c) => {
+    const site = (await c.query(
+      `SELECT pos.name AS "positionName", p.name AS "projectName" FROM project_position_assignments a
+       JOIN positions pos ON pos.id = a."positionId" JOIN projects p ON p.id = a."projectId" WHERE a."userId" = $1`, [target.id])).rows;
+    const ho = (await c.query(
+      `SELECT pos.name AS "positionName", 'Head Office' AS "projectName" FROM head_office_position_assignments a
+       JOIN positions pos ON pos.id = a."positionId" WHERE a."userId" = $1`, [target.id])).rows;
+    const managed = (await c.query('SELECT name FROM projects WHERE "managerId" = $1', [target.id])).rows;
+    await c.query('UPDATE projects SET "managerId" = NULL WHERE "managerId" = $1', [target.id]);
+    await c.query('DELETE FROM project_assignments WHERE "userId" = $1', [target.id]);
+    await c.query('DELETE FROM project_position_assignments WHERE "userId" = $1', [target.id]);
+    await c.query('DELETE FROM head_office_position_assignments WHERE "userId" = $1', [target.id]);
+    await c.query('UPDATE users SET "isActive" = false WHERE id = $1', [target.id]);
+    return [...site, ...ho, ...managed.map((m) => ({ positionName: 'Project Manager', projectName: m.name }))];
+  });
+  res.json({ ok: true, freedSeats: seats });
+});
+
+router.put('/:id/activate', requireAuth, requireRole('admin'), async (req, res) => {
+  const r = await query('UPDATE users SET "isActive" = true WHERE id = $1', [req.params.id]);
+  if (r.rowCount === 0) return res.status(404).json({ error: 'User not found' });
+  res.json({ ok: true });
 });
 
 router.delete('/:id', requireAuth, requireRole('admin'), async (req, res) => {

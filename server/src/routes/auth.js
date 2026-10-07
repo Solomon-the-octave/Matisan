@@ -19,6 +19,8 @@ router.post('/login', async (req, res) => {
     return res.status(401).json({ error: 'Invalid email or password' });
   }
 
+  if (user.isActive === false) return res.status(403).json({ error: 'This account has been deactivated. Please contact the administrator.' });
+
   const token = signToken(user);
   res.json({ token, user: publicUser(user) });
 });

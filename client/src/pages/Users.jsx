@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { Plus, X, Trash2, Pencil, Eye, EyeOff, Wand2, Copy, CheckCircle2 } from 'lucide-react'
+import { Plus, X, Trash2, Pencil, Eye, EyeOff, Wand2, Copy, CheckCircle2, UserX, UserCheck } from 'lucide-react'
 import Layout from '../components/Layout'
 import Badge from '../components/Badge'
 import ScrollHint from '../components/ScrollHint'
@@ -39,7 +39,7 @@ export default function Users() {
 
   async function load() {
     const [u, d, pr, po] = await Promise.all([
-      api.get('/users'),
+      api.get('/users', { params: { includeInactive: '1' } }),
       api.get('/departments'),
       api.get('/projects').catch(() => ({ data: { projects: [] } })),
       api.get('/positions').catch(() => ({ data: { positions: [] } })),
@@ -128,20 +128,46 @@ export default function Users() {
     }
   }
 
-  async function remove(id) {
-    if (!confirm('Remove this user? This cannot be undone.')) return
+  async function deactivate(u) {
+    if (!confirm(`Deactivate ${u.name}?\n\nThey will no longer be able to sign in and will be taken off every project team and approval seat. Their attendance, tasks and approval history stay. You can reactivate them any time.`)) return
     setNotice('')
     try {
-      await api.delete(`/users/${id}`)
+      const res = await api.put(`/users/${u.id}/deactivate`)
+      const seats = res.data.freedSeats || []
+      setNotice(seats.length
+        ? `${u.name} is deactivated. These seats are now empty and need someone else: ${seats.map((s) => `${s.positionName} (${s.projectName})`).join(', ')}.`
+        : `${u.name} is deactivated.`)
       load()
     } catch (e) {
-      setNotice(e.response?.data?.error || 'Could not remove this user')
+      setNotice(e.response?.data?.error || 'Could not deactivate this user')
+    }
+  }
+
+  async function reactivate(u) {
+    setNotice('')
+    try {
+      await api.put(`/users/${u.id}/activate`)
+      setNotice(`${u.name} is active again. Assign their seats and projects again if they need them.`)
+      load()
+    } catch (e) {
+      setNotice(e.response?.data?.error || 'Could not reactivate this user')
+    }
+  }
+
+  async function remove(u) {
+    if (!confirm(`Delete ${u.name} permanently? This cannot be undone.`)) return
+    setNotice('')
+    try {
+      await api.delete(`/users/${u.id}`)
+      load()
+    } catch (e) {
+      setNotice(e.response?.data?.error || 'Could not delete this user')
     }
   }
 
   return (
     <Layout title={user.role === 'admin' ? 'Users' : 'My Team'} subtitle="Manage people and their department access">
-      {notice && <p className="mb-4 rounded-lg bg-rose-50 dark:bg-rose-500/10 px-4 py-3 text-sm font-medium text-rose-700 dark:text-rose-300">{notice}</p>}
+      {notice && <p className="mb-4 rounded-lg bg-slate-100 dark:bg-slate-800 px-4 py-3 text-sm font-medium text-slate-700 dark:text-slate-200">{notice}</p>}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           {deptFilter && (
@@ -175,9 +201,9 @@ export default function Users() {
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {visible.map((u) => (
-              <tr key={u.id}>
+              <tr key={u.id} className={u.isActive === false ? 'opacity-60' : ''}>
                 <td className="px-4 py-3">
-                  <div className="font-semibold text-slate-700 dark:text-slate-200">{u.name}</div>
+                  <div className="font-semibold text-slate-700 dark:text-slate-200">{u.name}{u.isActive === false && <span className="ml-2 rounded-full bg-slate-200 dark:bg-slate-700 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300">Inactive</span>}</div>
                   <div className="text-xs text-slate-400">{u.title}</div>
                 </td>
                 <td className="px-4 py-3 text-slate-500">{deptName(u.department)}</td>
@@ -190,11 +216,20 @@ export default function Users() {
                   <button onClick={() => openEdit(u)} title="Edit user" aria-label="Edit user" className="mr-2 text-slate-300 dark:text-slate-600 hover:text-brand-600">
                     <Pencil size={15} />
                   </button>
-                  {user.role === 'admin' && u.id !== user.id && (
-                    <button onClick={() => remove(u.id)} title="Remove user" aria-label="Remove user"  className="text-slate-300 dark:text-slate-600 hover:text-rose-500">
-                      <Trash2 size={15} />
+                  {user.role === 'admin' && u.id !== user.id && !u.isGlobalAdmin && (u.isActive === false ? (
+                    <>
+                      <button onClick={() => reactivate(u)} title="Reactivate user" aria-label="Reactivate user" className="mr-2 text-slate-300 dark:text-slate-600 hover:text-emerald-600">
+                        <UserCheck size={15} />
+                      </button>
+                      <button onClick={() => remove(u)} title="Delete permanently" aria-label="Delete permanently" className="text-slate-300 dark:text-slate-600 hover:text-rose-500">
+                        <Trash2 size={15} />
+                      </button>
+                    </>
+                  ) : (
+                    <button onClick={() => deactivate(u)} title="Deactivate user" aria-label="Deactivate user" className="text-slate-300 dark:text-slate-600 hover:text-rose-500">
+                      <UserX size={15} />
                     </button>
-                  )}
+                  ))}
                 </td>
               </tr>
             ))}
