@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Building2, Users, FolderKanban, ListChecks,
   CalendarCheck, FileBarChart, UserCircle, LogOut, Bell, Menu, X, HardHat, ClipboardCheck,
-  Sun, Moon,
+  Sun, Moon, Network,
 } from 'lucide-react'
 import { useState } from 'react'
 import Logo from './Logo'
@@ -20,6 +20,7 @@ const NAV = {
     { to: '/field-attendance', label: 'Field Attendance', icon: HardHat },
     { to: '/payroll-review', label: 'Payroll Review', icon: ClipboardCheck },
     { to: '/reports', label: 'Reports', icon: FileBarChart },
+    { to: '/organization', label: 'Head Office', icon: Network },
   ],
   supervisor: [
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -30,9 +31,11 @@ const NAV = {
     { to: '/payroll-review', label: 'Payroll Review', icon: ClipboardCheck },
     { to: '/users', label: 'My Team', icon: Users },
     { to: '/reports', label: 'Reports', icon: FileBarChart },
+    { to: '/organization', label: 'Head Office', icon: Network },
   ],
   employee: [
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/projects', label: 'My Project', icon: FolderKanban },
     { to: '/attendance', label: 'Check In', icon: CalendarCheck },
     { to: '/field-attendance', label: 'Field Attendance', icon: HardHat },
     { to: '/tasks', label: 'My Tasks', icon: ListChecks },
@@ -41,6 +44,7 @@ const NAV = {
   finance: [
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/payroll-review', label: 'Payroll Review', icon: ClipboardCheck },
+    { to: '/organization', label: 'Head Office', icon: Network },
     { to: '/profile', label: 'Profile', icon: UserCircle },
   ],
 }

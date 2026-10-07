@@ -10,6 +10,7 @@ import FieldAttendance from './pages/FieldAttendance'
 import PayrollReview from './pages/PayrollReview'
 import Reports from './pages/Reports'
 import Profile from './pages/Profile'
+import Organization from './pages/Organization'
 import ProtectedRoute from './components/ProtectedRoute'
 
 export default function App() {
@@ -25,6 +26,7 @@ export default function App() {
       <Route path="/field-attendance" element={<ProtectedRoute><FieldAttendance /></ProtectedRoute>} />
       <Route path="/payroll-review" element={<ProtectedRoute roles={['admin', 'supervisor', 'finance']}><PayrollReview /></ProtectedRoute>} />
       <Route path="/reports" element={<ProtectedRoute roles={['admin', 'supervisor']}><Reports /></ProtectedRoute>} />
+      <Route path="/organization" element={<ProtectedRoute><Organization /></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
       <Route path="/" element={<Navigate to="/dashboard" replace />} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

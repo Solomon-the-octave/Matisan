@@ -192,3 +192,63 @@ CREATE INDEX IF NOT EXISTS attendance_submissions_dept_idx ON attendance_submiss
 -- left early) and a short note. Payroll deducts lateHours/8 of a day.
 ALTER TABLE worker_attendance ADD COLUMN IF NOT EXISTS "lateHours" double precision NOT NULL DEFAULT 0;
 ALTER TABLE worker_attendance ADD COLUMN IF NOT EXISTS "activityNote" text;
+
+-- ---------------------------------------------------------------------------
+-- Company structure (paper "Head Office Structure" and "Site Structure").
+-- A POSITION is a seat in the structure; a PERSON is a user assigned to it.
+-- The system role (admin/supervisor/employee/finance) is unchanged.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS positions (
+  id          text PRIMARY KEY,
+  name        text NOT NULL,
+  type        text NOT NULL CHECK (type IN ('head_office', 'site')),
+  level       integer NOT NULL,
+  "parentId"  text,
+  "sortOrder" integer NOT NULL DEFAULT 0
+);
+
+-- Who holds each position on a given project (site positions).
+CREATE TABLE IF NOT EXISTS project_position_assignments (
+  id           text PRIMARY KEY,
+  "projectId"  text NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  "positionId" text NOT NULL REFERENCES positions(id),
+  "userId"     text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  UNIQUE ("projectId", "positionId")
+);
+
+-- Who holds each head-office position (company-wide, one person per seat).
+CREATE TABLE IF NOT EXISTS head_office_position_assignments (
+  id           text PRIMARY KEY,
+  "positionId" text NOT NULL UNIQUE REFERENCES positions(id),
+  "userId"     text NOT NULL REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- Project details from the paper project sheet.
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS "projectNumber" text;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS client text;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS contractor text;
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS consultant text;
+
+INSERT INTO positions (id, name, type, level, "parentId", "sortOrder") VALUES
+  ('ho-gm',                'General Manager',         'head_office', 1, NULL,            1),
+  ('ho-dgm',               'Deputy General Manager',  'head_office', 2, 'ho-gm',         2),
+  ('ho-core-manager',      'Core Department Manager', 'head_office', 3, 'ho-dgm',        3),
+  ('ho-finance',           'Finance',                 'head_office', 3, 'ho-dgm',        4),
+  ('ho-administrator',     'Administrator',           'head_office', 3, 'ho-dgm',        5),
+  ('ho-contract',          'Contract Department',     'head_office', 4, 'ho-core-manager', 6),
+  ('ho-construction',      'Construction Department', 'head_office', 4, 'ho-core-manager', 7),
+  ('ho-office-engineer',   'Office Engineer',         'head_office', 5, 'ho-contract',   8),
+  ('ho-qs',                'Quantity Surveyor',       'head_office', 5, 'ho-contract',   9),
+  ('ho-project-coordinator','Project Coordinator',    'head_office', 5, 'ho-construction', 10),
+  ('ho-finance-office',    'Finance (Office)',        'head_office', 4, 'ho-finance',    11),
+  ('ho-finance-site',      'Finance (Site)',          'head_office', 4, 'ho-finance',    12),
+  ('site-project-manager', 'Project Manager',         'site', 1, NULL,                   1),
+  ('site-engineer',        'Site Engineer',           'site', 2, 'site-project-manager', 2),
+  ('site-office-engineer', 'Office Engineer',         'site', 2, 'site-project-manager', 3),
+  ('site-finance',         'Site Finance',            'site', 2, 'site-project-manager', 4),
+  ('foreman',              'Foreman',                 'site', 3, 'site-engineer',        5),
+  ('site-qs',              'Quantity Surveyor',       'site', 3, 'site-office-engineer', 6),
+  ('data-collector',       'Data Collector',          'site', 3, 'site-office-engineer', 7),
+  ('time-keeper',          'Time Keeper',             'site', 3, 'site-finance',         8),
+  ('store-keeper',         'Store Keeper',            'site', 3, 'site-finance',         9)
+ON CONFLICT (id) DO NOTHING;

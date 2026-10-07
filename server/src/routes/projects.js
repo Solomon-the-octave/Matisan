@@ -68,7 +68,7 @@ async function checkManager(managerId, department) {
 }
 
 router.post('/', requireAuth, requireRole('admin', 'supervisor'), async (req, res) => {
-  const { name, site, department, description, startDate, endDate, priority, managerId } = req.body;
+  const { name, site, department, description, startDate, endDate, priority, managerId, projectNumber, client, contractor, consultant } = req.body;
   if (!name || !department) return res.status(400).json({ error: 'name and department are required' });
   if (!req.user.isGlobalAdmin && department !== req.user.department) {
     return res.status(403).json({ error: 'Outside your department access point' });
@@ -83,9 +83,10 @@ router.post('/', requireAuth, requireRole('admin', 'supervisor'), async (req, re
   }
   const id = generateId('p');
   await query(
-    `INSERT INTO projects (id, name, site, department, "managerId", status, progress, "startDate", "endDate", priority, description)
-     VALUES ($1,$2,$3,$4,$5,'active',0,$6,$7,$8,$9)`,
-    [id, name, site || '', department, manager, start, endDate || null, priority || 'medium', description || '']
+    `INSERT INTO projects (id, name, site, department, "managerId", status, progress, "startDate", "endDate", priority, description, "projectNumber", client, contractor, consultant)
+     VALUES ($1,$2,$3,$4,$5,'active',0,$6,$7,$8,$9,$10,$11,$12,$13)`,
+    [id, name, site || '', department, manager, start, endDate || null, priority || 'medium', description || '',
+     projectNumber || null, client || null, contractor || null, consultant || null]
   );
   res.status(201).json({ project: await getProject(id) });
 });
@@ -96,7 +97,7 @@ router.put('/:id', requireAuth, requireRole('admin', 'supervisor'), async (req, 
   if (!req.user.isGlobalAdmin && project.department !== req.user.department) {
     return res.status(403).json({ error: 'Outside your department access point' });
   }
-  const { status, progress, description, name, site, endDate, priority, managerId } = req.body;
+  const { status, progress, description, name, site, endDate, priority, managerId, projectNumber, client, contractor, consultant } = req.body;
   if (priority && !PRIORITIES.includes(priority)) return res.status(400).json({ error: 'Invalid priority' });
   if (managerId) {
     const err = await checkManager(managerId, project.department);
@@ -111,10 +112,15 @@ router.put('/:id', requireAuth, requireRole('admin', 'supervisor'), async (req, 
        site = COALESCE($5, site),
        "endDate" = COALESCE($6, "endDate"),
        priority = COALESCE($7, priority),
-       "managerId" = COALESCE($8, "managerId")
-     WHERE id = $9`,
+       "managerId" = COALESCE($8, "managerId"),
+       "projectNumber" = COALESCE($9, "projectNumber"),
+       client = COALESCE($10, client),
+       contractor = COALESCE($11, contractor),
+       consultant = COALESCE($12, consultant)
+     WHERE id = $13`,
     [status ?? null, progress ?? null, description ?? null, name ?? null, site ?? null,
-     endDate || null, priority ?? null, managerId || null, project.id]
+     endDate || null, priority ?? null, managerId || null,
+     projectNumber ?? null, client ?? null, contractor ?? null, consultant ?? null, project.id]
   );
   res.json({ project: await getProject(project.id) });
 });

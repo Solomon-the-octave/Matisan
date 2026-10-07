@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import { Plus, X, MapPin, UserCog, FileText, Upload, Download, Trash2, Loader2 } from 'lucide-react'
+import { Plus, X, MapPin, UserCog, FileText, Upload, Download, Trash2, Loader2, Network } from 'lucide-react'
 import Layout from '../components/Layout'
 import Badge from '../components/Badge'
+import TeamTree from '../components/TeamTree'
 import api from '../api'
 import { useAuth } from '../context/AuthContext'
 
 const today = () => new Date().toISOString().slice(0, 10)
-const emptyForm = { name: '', site: '', department: '', description: '', managerId: '', priority: 'medium', startDate: today(), endDate: '' }
+const emptyForm = { name: '', projectNumber: '', site: '', client: '', contractor: '', consultant: '', department: '', description: '', managerId: '', priority: 'medium', startDate: today(), endDate: '' }
 const PRIORITY_STYLE = {
   high: 'bg-rose-50 dark:bg-rose-500/15 text-rose-700 dark:text-rose-300',
   medium: 'bg-amber-50 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300',
@@ -28,6 +29,8 @@ export default function Projects() {
   const [form, setForm] = useState(emptyForm)
   const [assignFor, setAssignFor] = useState(null) // project being edited in the assign panel
   const [docsFor, setDocsFor] = useState(null) // project whose documents panel is open
+  const [teamFor, setTeamFor] = useState(null) // project whose Project Team tree is open
+  const [teamByProject, setTeamByProject] = useState({})
   const [docsByProject, setDocsByProject] = useState({})
   const [uploadingFor, setUploadingFor] = useState(null)
   const [pendingFiles, setPendingFiles] = useState([])
@@ -49,6 +52,26 @@ export default function Projects() {
   async function setAssignment(project, userId, action) {
     await api.put(`/projects/${project.id}/assignments`, { userId, action })
     load()
+  }
+
+  async function toggleTeam(projectId) {
+    if (teamFor === projectId) {
+      setTeamFor(null)
+      return
+    }
+    setTeamFor(projectId)
+    const res = await api.get(`/positions/projects/${projectId}`)
+    setTeamByProject((t) => ({ ...t, [projectId]: res.data.team }))
+  }
+
+  async function assignPosition(projectId, positionId, userId) {
+    try {
+      const res = await api.put(`/positions/projects/${projectId}/${positionId}`, { userId })
+      setTeamByProject((t) => ({ ...t, [projectId]: res.data.team }))
+      load()
+    } catch (err) {
+      alert(err.response?.data?.error || 'Could not assign that position')
+    }
   }
 
   async function loadDocuments(projectId) {
@@ -195,11 +218,15 @@ export default function Projects() {
             </div>
             <p className="mt-3 text-sm text-slate-500">{p.description}</p>
             <dl className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-1 text-xs">
+              {p.projectNumber && (<><dt className="text-slate-400">Project no.</dt><dd className="text-right text-slate-600 dark:text-slate-300">{p.projectNumber}</dd></>)}
+              {p.client && (<><dt className="text-slate-400">Client</dt><dd className="text-right text-slate-600 dark:text-slate-300">{p.client}</dd></>)}
+              {p.contractor && (<><dt className="text-slate-400">Contractor</dt><dd className="text-right text-slate-600 dark:text-slate-300">{p.contractor}</dd></>)}
+              {p.consultant && (<><dt className="text-slate-400">Consultant</dt><dd className="text-right text-slate-600 dark:text-slate-300">{p.consultant}</dd></>)}
               <dt className="text-slate-400">Starts</dt>
               <dd className="text-right text-slate-600 dark:text-slate-300">{p.startDate || '-'}</dd>
               <dt className="text-slate-400">Planned finish</dt>
               <dd className="text-right text-slate-600 dark:text-slate-300">{p.endDate || '-'}</dd>
-              <dt className="text-slate-400">Responsible</dt>
+              <dt className="text-slate-400">Project manager</dt>
               <dd className="flex min-w-0 justify-end text-right text-slate-600 dark:text-slate-300">
                 {canManage ? (
                   <select
@@ -242,6 +269,25 @@ export default function Projects() {
                 />
               </div>
             )}
+
+            <div className="mt-3 border-t border-slate-100 dark:border-slate-800 pt-3">
+              <button
+                onClick={() => toggleTeam(p.id)}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-600 dark:text-brand-400 hover:text-brand-700"
+              >
+                <Network size={13} /> Project team
+              </button>
+              {teamFor === p.id && teamByProject[p.id] && (
+                <div className="mt-3">
+                  <TeamTree
+                    stacked
+                    nodes={teamByProject[p.id]}
+                    users={users.filter((u) => u.department === p.department || u.role === 'admin')}
+                    onAssign={user.role === 'admin' ? (positionId, userId) => assignPosition(p.id, positionId, userId) : undefined}
+                  />
+                </div>
+              )}
+            </div>
 
             {canManage && (
               <div className="mt-3 border-t border-slate-100 dark:border-slate-800 pt-3">
@@ -345,8 +391,16 @@ export default function Projects() {
               <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"><X size={18} /></button>
             </div>
             <form onSubmit={submit} className="space-y-3">
-              <input required placeholder="Project name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="input" />
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <input required placeholder="Project name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="input sm:col-span-2" />
+                <input placeholder="Project no." value={form.projectNumber} onChange={(e) => setForm({ ...form, projectNumber: e.target.value })} className="input" />
+              </div>
               <input placeholder="Site / location" value={form.site} onChange={(e) => setForm({ ...form, site: e.target.value })} className="input" />
+              <input placeholder="Client" value={form.client} onChange={(e) => setForm({ ...form, client: e.target.value })} className="input" />
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <input placeholder="Contractor" value={form.contractor} onChange={(e) => setForm({ ...form, contractor: e.target.value })} className="input" />
+                <input placeholder="Consultant" value={form.consultant} onChange={(e) => setForm({ ...form, consultant: e.target.value })} className="input" />
+              </div>
               <label className="block">
                 <span className="mb-1 block text-xs font-semibold text-slate-500">Department</span>
                 <select
@@ -361,7 +415,7 @@ export default function Projects() {
                 </select>
               </label>
               <label className="block">
-                <span className="mb-1 block text-xs font-semibold text-slate-500">Responsible person</span>
+                <span className="mb-1 block text-xs font-semibold text-slate-500">Project manager</span>
                 <select
                   value={form.managerId}
                   disabled={!form.department}
