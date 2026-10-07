@@ -5,6 +5,8 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import { publicUser } from './auth.js';
 
 const router = Router();
+const ROLES = ['admin', 'supervisor', 'employee', 'finance'];
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // List users - admins see everyone, supervisors see their own department
 router.get('/', requireAuth, async (req, res) => {
@@ -18,9 +20,20 @@ router.get('/', requireAuth, async (req, res) => {
 });
 
 router.post('/', requireAuth, requireRole('admin', 'supervisor'), async (req, res) => {
-  const { name, email, password, role, department, title, phone } = req.body;
+  const { password, role, department, title, phone } = req.body;
+  const name = String(req.body.name || '').trim();
+  const email = String(req.body.email || '').trim();
   if (!name || !email || !password || !role || !department) {
     return res.status(400).json({ error: 'name, email, password, role, department are required' });
+  }
+  if (!EMAIL_RE.test(email)) return res.status(400).json({ error: 'Enter a valid email address' });
+  if (String(password).length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+  if (!ROLES.includes(role)) return res.status(400).json({ error: 'Invalid role' });
+  if (!(await row('SELECT id FROM departments WHERE id = $1', [department]))) {
+    return res.status(400).json({ error: 'Department not found' });
+  }
+  if (!req.user.isGlobalAdmin && role === 'finance') {
+    return res.status(403).json({ error: 'Only administrators can create finance accounts' });
   }
   if (!req.user.isGlobalAdmin && department !== req.user.department) {
     return res.status(403).json({ error: 'Outside your department access point' });
@@ -59,7 +72,25 @@ router.put('/:id', requireAuth, requireRole('admin', 'supervisor'), async (req, 
   if (!req.user.isGlobalAdmin && target.department !== req.user.department) {
     return res.status(403).json({ error: 'Outside your department access point' });
   }
-  const { name, role, title, phone, department } = req.body;
+  const { name, role, title, phone, department, email, password } = req.body;
+  if (role && !ROLES.includes(role)) return res.status(400).json({ error: 'Invalid role' });
+  if (target.isGlobalAdmin && ((role && role !== 'admin') || (department && department !== target.department))) {
+    return res.status(403).json({ error: 'The main administrator account keeps its admin role and department' });
+  }
+  if (department && !(await row('SELECT id FROM departments WHERE id = $1', [department]))) {
+    return res.status(400).json({ error: 'Department not found' });
+  }
+  if (req.user.isGlobalAdmin && email && email.trim().toLowerCase() !== target.email.toLowerCase()) {
+    if (!EMAIL_RE.test(email.trim())) return res.status(400).json({ error: 'Enter a valid email address' });
+    if (await row('SELECT id FROM users WHERE lower(email) = lower($1) AND id <> $2', [email.trim(), target.id])) {
+      return res.status(409).json({ error: 'A user with that email already exists' });
+    }
+    await query('UPDATE users SET email = $1 WHERE id = $2', [email.trim(), target.id]);
+  }
+  if (req.user.isGlobalAdmin && password) {
+    if (String(password).length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    await query('UPDATE users SET "passwordHash" = $1 WHERE id = $2', [bcrypt.hashSync(password, 10), target.id]);
+  }
   const next = {
     name: name || target.name,
     title: title !== undefined ? title : target.title,
