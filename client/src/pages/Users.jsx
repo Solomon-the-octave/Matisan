@@ -34,6 +34,7 @@ export default function Users() {
   const [projects, setProjects] = useState([])
   const [positions, setPositions] = useState([])
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   const deptFilter = params.get('department') || ''
 
   async function load() {
@@ -128,13 +129,19 @@ export default function Users() {
   }
 
   async function remove(id) {
-    if (!confirm('Remove this user?')) return
-    await api.delete(`/users/${id}`)
-    load()
+    if (!confirm('Remove this user? This cannot be undone.')) return
+    setNotice('')
+    try {
+      await api.delete(`/users/${id}`)
+      load()
+    } catch (e) {
+      setNotice(e.response?.data?.error || 'Could not remove this user')
+    }
   }
 
   return (
     <Layout title={user.role === 'admin' ? 'Users' : 'My Team'} subtitle="Manage people and their department access">
+      {notice && <p className="mb-4 rounded-lg bg-rose-50 dark:bg-rose-500/10 px-4 py-3 text-sm font-medium text-rose-700 dark:text-rose-300">{notice}</p>}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           {deptFilter && (

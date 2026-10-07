@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
-import { rows, row, query, generateId } from '../db.js';
+import { rows, row, query, generateId, withTransaction } from '../db.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { publicUser } from './auth.js';
 
@@ -107,8 +107,27 @@ router.put('/:id', requireAuth, requireRole('admin', 'supervisor'), async (req, 
 });
 
 router.delete('/:id', requireAuth, requireRole('admin'), async (req, res) => {
-  const result = await query('DELETE FROM users WHERE id = $1', [req.params.id]);
-  if (result.rowCount === 0) return res.status(404).json({ error: 'User not found' });
+  const target = await row('SELECT id, name, "isGlobalAdmin" FROM users WHERE id = $1', [req.params.id]);
+  if (!target) return res.status(404).json({ error: 'User not found' });
+  if (target.isGlobalAdmin) return res.status(403).json({ error: 'The main administrator cannot be removed' });
+  if (target.id === req.user.id) return res.status(403).json({ error: 'You cannot remove your own account' });
+  try {
+    await withTransaction(async (c) => {
+      // Take the person out of seats and teams first; they are links, not history.
+      await c.query('UPDATE projects SET "managerId" = NULL WHERE "managerId" = $1', [target.id]);
+      await c.query('DELETE FROM project_assignments WHERE "userId" = $1', [target.id]);
+      await c.query('DELETE FROM project_position_assignments WHERE "userId" = $1', [target.id]);
+      await c.query('DELETE FROM head_office_position_assignments WHERE "userId" = $1', [target.id]);
+      await c.query('DELETE FROM notifications WHERE "userId" = $1', [target.id]);
+      await c.query('DELETE FROM users WHERE id = $1', [target.id]);
+    });
+  } catch (e) {
+    if (e.code === '23503') {
+      // They have real records (attendance, tasks, workers registered, approvals...), which must stay.
+      return res.status(409).json({ error: `${target.name} has attendance, task, worker or approval records, so the account can't be deleted without losing history. Change their role or reassign their work instead.` });
+    }
+    throw e;
+  }
   res.json({ ok: true });
 });
 
