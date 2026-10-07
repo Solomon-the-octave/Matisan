@@ -219,7 +219,7 @@ router.post('/period/:id/complete', requireAuth, async (req, res) => {
   if (pointer === 1) return res.status(409).json({ error: 'Step 1 is the weekly hand-in. Submit the week from Field Attendance.' });
   const def = APPROVAL_STEPS[pointer - 1];
   if (!(await canActOnStep(req.user, period, def))) {
-    return res.status(403).json({ error: `Only the ${def.label.replace(' By', '')} position holder can do this step` });
+    return res.status(403).json({ error: `Only the ${def.name} (${def.label}) can do this step` });
   }
   const comment = req.body.comment ? String(req.body.comment).slice(0, 300) : null;
   await logStep(period, pointer, req.user.id, 'completed', { comment });
@@ -233,7 +233,7 @@ router.post('/period/:id/return', requireAuth, async (req, res) => {
   if (pointer < 2 || pointer > LAST_STEP) return res.status(409).json({ error: 'There is nothing to return at this stage' });
   const def = APPROVAL_STEPS[pointer - 1];
   if (!(await canActOnStep(req.user, period, def))) {
-    return res.status(403).json({ error: `Only the ${def.label.replace(' By', '')} position holder can do this step` });
+    return res.status(403).json({ error: `Only the ${def.name} (${def.label}) can do this step` });
   }
   const comment = req.body.comment ? String(req.body.comment).trim().slice(0, 300) : '';
   if (!comment) return res.status(400).json({ error: 'Add a short reason so the previous person knows what to fix' });

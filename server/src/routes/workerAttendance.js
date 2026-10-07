@@ -91,7 +91,7 @@ router.post('/', requireAuth, async (req, res) => {
 
   const day = date || todayStr();
   if (effectiveProjectId && !req.user.isGlobalAdmin && (await findLockedPeriod(effectiveProjectId, day))) {
-    return res.status(423).json({ error: 'This week has been approved and is locked. Ask an admin to reopen it.' });
+    return res.status(423).json({ error: 'This week has passed the site checks and is with head office, so it is locked. Ask an admin to reopen it.' });
   }
   if (effectiveProjectId && req.user.role === 'employee' && (await findSubmissionLock(effectiveProjectId, day))) {
     return res.status(423).json({ error: 'This day was already submitted to your supervisor. Ask them to return it to make changes.' });
@@ -146,7 +146,7 @@ router.put('/:id', requireAuth, async (req, res) => {
     }
   }
   if (record.projectId && !req.user.isGlobalAdmin && (await findLockedPeriod(record.projectId, record.date))) {
-    return res.status(423).json({ error: 'This week has been approved and is locked. Ask an admin to reopen it.' });
+    return res.status(423).json({ error: 'This week has passed the site checks and is with head office, so it is locked. Ask an admin to reopen it.' });
   }
   if (record.projectId && req.user.role === 'employee' && (await findSubmissionLock(record.projectId, record.date))) {
     return res.status(423).json({ error: 'This day was already submitted to your supervisor. Ask them to return it to make changes.' });
