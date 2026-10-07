@@ -15,6 +15,32 @@ router.get('/', requireAuth, async (req, res) => {
   res.json({ positions });
 });
 
+// Every seat held by every active person — drives the "Name / Position /
+// Project" labels and the position-aware task picker. Names only.
+router.get('/directory', requireAuth, async (req, res) => {
+  const site = await rows(
+    `SELECT a."userId", u.name AS "userName", a."positionId", pos.name AS "positionName", 'site' AS type,
+            a."projectId", p.name AS "projectName"
+     FROM project_position_assignments a
+     JOIN users u ON u.id = a."userId" AND u."isActive" IS NOT FALSE
+     JOIN positions pos ON pos.id = a."positionId" JOIN projects p ON p.id = a."projectId"`
+  );
+  const pms = await rows(
+    `SELECT p."managerId" AS "userId", u.name AS "userName", 'site-project-manager' AS "positionId", 'Project Manager' AS "positionName",
+            'site' AS type, p.id AS "projectId", p.name AS "projectName"
+     FROM projects p JOIN users u ON u.id = p."managerId" AND u."isActive" IS NOT FALSE
+     WHERE p."managerId" IS NOT NULL`
+  );
+  const head = await rows(
+    `SELECT a."userId", u.name AS "userName", a."positionId", pos.name AS "positionName", 'head_office' AS type,
+            NULL AS "projectId", NULL AS "projectName"
+     FROM head_office_position_assignments a
+     JOIN users u ON u.id = a."userId" AND u."isActive" IS NOT FALSE
+     JOIN positions pos ON pos.id = a."positionId"`
+  );
+  res.json({ seats: [...head, ...pms, ...site] });
+});
+
 // Head office seats and who holds them.
 router.get('/head-office', requireAuth, async (req, res) => {
   const assignments = await rows(

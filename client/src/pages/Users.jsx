@@ -7,7 +7,7 @@ import ScrollHint from '../components/ScrollHint'
 import api from '../api'
 import { useAuth } from '../context/AuthContext'
 
-const emptyForm = { name: '', email: '', password: '', role: 'employee', department: '', title: '', phone: '', projectId: '', positionKey: '' }
+const emptyForm = { name: '', email: '', password: '', role: 'employee', department: '', title: '', phone: '', projectId: '', positionKey: '', customTitle: false }
 const ROLE_INFO = {
   employee: { label: 'Employee', lands: 'Employee dashboard: their project, tasks, and daily field attendance' },
   supervisor: { label: 'Supervisor', lands: 'Supervisor dashboard: their team, projects, tasks, and attendance review' },
@@ -33,17 +33,20 @@ export default function Users() {
   const [created, setCreated] = useState(null) // summary card after a user is created
   const [projects, setProjects] = useState([])
   const [positions, setPositions] = useState([])
+  const [seats, setSeats] = useState([])
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const deptFilter = params.get('department') || ''
 
   async function load() {
-    const [u, d, pr, po] = await Promise.all([
+    const [u, d, pr, po, dir] = await Promise.all([
       api.get('/users', { params: { includeInactive: '1' } }),
       api.get('/departments'),
       api.get('/projects').catch(() => ({ data: { projects: [] } })),
       api.get('/positions').catch(() => ({ data: { positions: [] } })),
+      api.get('/positions/directory').catch(() => ({ data: { seats: [] } })),
     ])
+    setSeats(dir.data.seats || [])
     setUsers(u.data.users)
     setDepartments(d.data.departments)
     setProjects(pr.data.projects || [])
@@ -73,7 +76,7 @@ export default function Users() {
 
   function openEdit(u) {
     setEditingId(u.id)
-    setForm({ ...emptyForm, name: u.name, email: u.email, role: u.role, department: u.department, title: u.title || '', phone: u.phone || '' })
+    setForm({ ...emptyForm, name: u.name, email: u.email, role: u.role, department: u.department, title: u.title || '', phone: u.phone || '', customTitle: !!u.title })
     setError('')
     setShowForm(true)
   }
@@ -82,9 +85,18 @@ export default function Users() {
   const sitePositions = positions.filter((p) => p.type === 'site' && p.id !== 'site-project-manager')
   const headPositions = positions.filter((p) => p.type === 'head_office')
 
+  const selectedPos = positions.find((p) => p.id === form.positionKey)
+  const needsProject = selectedPos?.type === 'site'
+  function pickPosition(v) {
+    if (v === '__other') return setForm({ ...form, positionKey: '', customTitle: true })
+    const pos = positions.find((p) => p.id === v)
+    setForm({ ...form, positionKey: v, customTitle: false, title: pos ? pos.name : '', projectId: pos?.type === 'site' ? form.projectId : '' })
+  }
+
   async function submit(e) {
     e.preventDefault()
     setError('')
+    if (needsProject && !form.projectId) { setError('Pick the project this position is on'); return }
     setSaving(true)
     try {
       if (editingId) {
@@ -92,11 +104,15 @@ export default function Users() {
         if (user.isGlobalAdmin) Object.assign(body, { role: form.role, department: form.department, email: form.email })
         if (user.isGlobalAdmin && form.password) body.password = form.password
         await api.put(`/users/${editingId}`, body)
+        if (selectedPos && user.isGlobalAdmin) {
+          const url = selectedPos.type === 'head_office' ? `/positions/head-office/${selectedPos.id}` : `/positions/projects/${form.projectId}/${selectedPos.id}`
+          try { await api.put(url, { userId: editingId }) } catch (err) { setNotice(`Saved, but the position was not assigned: ${err.response?.data?.error || 'try again'}`) }
+        }
         closeForm()
         load()
         return
       }
-      const { projectId, positionKey, ...account } = form
+      const { projectId, positionKey, customTitle, ...account } = form
       const res = await api.post('/users', account)
       const newUser = res.data.user
       const notes = []
@@ -194,7 +210,7 @@ export default function Users() {
             <tr>
               <th className="px-4 py-3">Name</th>
               <th className="px-4 py-3">Department</th>
-              <th className="px-4 py-3">Role</th>
+              <th className="px-4 py-3">System Role</th>
               <th className="px-4 py-3">Contact</th>
               <th className="px-4 py-3"></th>
             </tr>
@@ -204,7 +220,12 @@ export default function Users() {
               <tr key={u.id} className={u.isActive === false ? 'opacity-60' : ''}>
                 <td className="px-4 py-3">
                   <div className="font-semibold text-slate-700 dark:text-slate-200">{u.name}{u.isActive === false && <span className="ml-2 rounded-full bg-slate-200 dark:bg-slate-700 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-300">Inactive</span>}</div>
-                  <div className="text-xs text-slate-400">{u.title}</div>
+                  {(() => {
+                    const mine = seats.filter((x) => x.userId === u.id)
+                    return mine.length
+                      ? mine.map((x) => <div key={x.positionId + (x.projectId || '')} className="text-xs text-slate-400">{x.positionName} · {x.projectName || 'Head Office'}</div>)
+                      : <div className="text-xs text-slate-400">{u.title ? `${u.title} · ` : ''}Position not assigned</div>
+                  })()}
                 </td>
                 <td className="px-4 py-3 text-slate-500">{deptName(u.department)}</td>
                 <td className="px-4 py-3"><Badge value={u.role} /></td>
@@ -302,7 +323,7 @@ export default function Users() {
               </Field>
             )}
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Role">
+              <Field label="System Role">
                 <select disabled={!!editingId && !user.isGlobalAdmin} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} className="input">
                   <option value="employee">Employee</option>
                   <option value="supervisor">Supervisor</option>
@@ -328,36 +349,54 @@ export default function Users() {
             <p className="rounded-lg bg-brand-50 dark:bg-brand-500/10 px-3 py-2 text-xs text-brand-700 dark:text-brand-300">
               Signs in to the {ROLE_INFO[form.role]?.lands}{form.department ? ` (${deptName(form.department)})` : ''}.
             </p>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Job title">
-                <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="input" />
-              </Field>
-              <Field label="Phone">
-                <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="input" />
-              </Field>
-            </div>
-            {!editingId && (
-              <div className="space-y-3 border-t border-slate-100 dark:border-slate-800 pt-3">
-                <p className="text-xs font-semibold text-slate-500">Assignment (optional, can be done later)</p>
-                <Field label="Project">
-                  <select value={form.projectId} onChange={(e) => setForm({ ...form, projectId: e.target.value })} className="input" disabled={!form.department}>
-                    <option value="">{form.department ? 'No project yet' : 'Pick a department first'}</option>
-                    {deptProjects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {user.isGlobalAdmin ? (
+              <div className="space-y-3">
+                <Field label="Job Position">
+                  <select value={form.customTitle && !form.positionKey ? '__other' : form.positionKey} onChange={(e) => pickPosition(e.target.value)} className="input">
+                    <option value="">Position not assigned</option>
+                    <optgroup label="Project site">
+                      {sitePositions.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </optgroup>
+                    <optgroup label="Head Office">
+                      {headPositions.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </optgroup>
+                    <option value="__other">Other (type a job title)</option>
                   </select>
                 </Field>
-                {user.isGlobalAdmin && (
-                  <Field label="Position">
-                    <select value={form.positionKey} onChange={(e) => setForm({ ...form, positionKey: e.target.value })} className="input">
-                      <option value="">No position yet</option>
-                      <optgroup label="Project site (needs a project above)">
-                        {sitePositions.map((p) => <option key={p.id} value={p.id} disabled={!form.projectId}>{p.name}</option>)}
-                      </optgroup>
-                      <optgroup label="Head Office">
-                        {headPositions.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                      </optgroup>
-                    </select>
+                {form.customTitle && !form.positionKey && (
+                  <Field label="Job title">
+                    <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="input" />
                   </Field>
                 )}
+                {needsProject ? (
+                  <Field label="Project">
+                    <select required value={form.projectId} onChange={(e) => setForm({ ...form, projectId: e.target.value })} className="input" disabled={!form.department}>
+                      <option value="">{form.department ? 'Select a project...' : 'Pick a department first'}</option>
+                      {deptProjects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </Field>
+                ) : selectedPos ? (
+                  <p className="text-xs text-slate-400">Head Office position: no project needed.</p>
+                ) : !editingId ? (
+                  <Field label="Project (optional)">
+                    <select value={form.projectId} onChange={(e) => setForm({ ...form, projectId: e.target.value })} className="input" disabled={!form.department}>
+                      <option value="">{form.department ? 'No project yet' : 'Pick a department first'}</option>
+                      {deptProjects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                  </Field>
+                ) : null}
+                <Field label="Phone">
+                  <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="input" />
+                </Field>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Job title">
+                  <input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="input" />
+                </Field>
+                <Field label="Phone">
+                  <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="input" />
+                </Field>
               </div>
             )}
             {error && <p className="text-sm font-medium text-rose-600 dark:text-rose-400">{error}</p>}

@@ -13,7 +13,14 @@ const PRIORITIES = ['low', 'medium', 'high'];
 const TASK_SELECT = `
   SELECT t.*,
     (SELECT count(*)::int FROM task_documents d WHERE d."taskId" = t.id) AS "attachmentCount",
-    au.name AS "assignedToName", cu.name AS "createdByName", p.name AS "projectName"
+    au.name AS "assignedToName",
+    COALESCE(
+      (SELECT pos.name FROM project_position_assignments a JOIN positions pos ON pos.id = a."positionId"
+         WHERE a."userId" = t."assignedTo" AND a."projectId" = t."projectId" LIMIT 1),
+      (SELECT 'Project Manager' FROM projects pm WHERE pm.id = t."projectId" AND pm."managerId" = t."assignedTo"),
+      (SELECT pos.name FROM head_office_position_assignments h JOIN positions pos ON pos.id = h."positionId"
+         WHERE h."userId" = t."assignedTo" LIMIT 1)
+    ) AS "assignedToPosition", cu.name AS "createdByName", p.name AS "projectName"
   FROM tasks t
   LEFT JOIN users au ON au.id = t."assignedTo"
   LEFT JOIN users cu ON cu.id = t."createdBy"
@@ -23,7 +30,18 @@ const TASK_SELECT = `
 async function validateTaskTargets({ department, assignedTo, projectId }) {
   const assignee = await row('SELECT * FROM users WHERE id = $1', [assignedTo]);
   if (!assignee) return 'Responsible person not found';
-  if (assignee.department !== department) return 'Responsible person must belong to the selected department';
+  if (assignee.isActive === false) return 'That person is deactivated';
+  if (assignee.department !== department) {
+    // A seat holder (head office, or a seat on this project) may be given work
+    // even when their own department differs.
+    const seat = await row(
+      `SELECT 1 AS x WHERE EXISTS (SELECT 1 FROM head_office_position_assignments WHERE "userId" = $1)
+         OR EXISTS (SELECT 1 FROM project_position_assignments WHERE "userId" = $1 AND "projectId" = $2)
+         OR EXISTS (SELECT 1 FROM projects WHERE id = $2 AND "managerId" = $1)`,
+      [assignedTo, projectId || null]
+    );
+    if (!seat) return 'Responsible person must belong to the selected department or hold a position on this project';
+  }
   if (projectId) {
     const project = await row('SELECT department FROM projects WHERE id = $1', [projectId]);
     if (!project) return 'Project not found';

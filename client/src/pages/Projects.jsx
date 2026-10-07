@@ -130,7 +130,7 @@ export default function Projects() {
 
   const deptName = (id) => departments.find((d) => d.id === id)?.name || id
   const userName = (id) => users.find((u) => u.id === id)?.name
-  const managersFor = (dept) => users.filter((u) => ['supervisor', 'admin'].includes(u.role) && (u.isGlobalAdmin || u.department === dept))
+  const managersFor = (dept) => users.filter((u) => ['supervisor', 'admin'].includes(u.role) && u.isActive !== false && (u.isGlobalAdmin || u.department === dept))
 
   function openNew() {
     setEditingId(null)

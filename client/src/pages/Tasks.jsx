@@ -6,7 +6,7 @@ import api from '../api'
 import { useAuth } from '../context/AuthContext'
 
 const STATUS_FLOW = ['created', 'in_progress', 'submitted', 'approved', 'completed']
-const emptyForm = { title: '', description: '', department: '', assignedTo: '', priority: 'medium', dueDate: '', projectId: '' }
+const emptyForm = { title: '', description: '', department: '', assignedTo: '', priority: 'medium', dueDate: '', projectId: '', positionKey: '' }
 const MAX_BYTES = 15 * 1024 * 1024
 
 function formatBytes(n) {
@@ -20,6 +20,7 @@ export default function Tasks() {
   const [tasks, setTasks] = useState([])
   const [projects, setProjects] = useState([])
   const [users, setUsers] = useState([])
+  const [seats, setSeats] = useState([])
   const [departments, setDepartments] = useState([])
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(emptyForm)
@@ -33,12 +34,13 @@ export default function Tasks() {
 
   async function load() {
     const calls = [api.get('/tasks'), api.get('/projects'), api.get('/departments')]
-    if (canManage) calls.push(api.get('/users'))
-    const [t, p, dep, u] = await Promise.all(calls)
+    if (canManage) calls.push(api.get('/users'), api.get('/positions/directory'))
+    const [t, p, dep, u, dir] = await Promise.all(calls)
     setTasks(t.data.tasks)
     setProjects(p.data.projects)
     setDepartments(dep.data.departments)
     if (u) setUsers(u.data.users)
+    if (dir) setSeats(dir.data.seats || [])
   }
 
   useEffect(() => {
@@ -62,9 +64,11 @@ export default function Tasks() {
   async function submit(e) {
     e.preventDefault()
     setFormError('')
+    if (!form.assignedTo) return setFormError('Pick the responsible position, or choose a person')
     setSaving(true)
     try {
-      const res = await api.post('/tasks', { ...form, projectId: form.projectId || undefined, dueDate: form.dueDate || undefined })
+      const { positionKey, ...payload } = form
+      const res = await api.post('/tasks', { ...payload, projectId: form.projectId || undefined, dueDate: form.dueDate || undefined })
       const failed = []
       for (const file of pendingFiles) {
         const fd = new FormData()
@@ -159,6 +163,19 @@ export default function Tasks() {
   // Assignees available when reassigning: same department as the task.
   const teamFor = (dept) => users.filter((u) => u.department === dept && u.role !== 'finance')
 
+  // Position-aware picker: the seats relevant to the chosen project (plus
+  // Head Office seats), each resolved to the person who holds it.
+  const seatOptions = seats.filter((s) => (form.projectId ? s.projectId === form.projectId || s.type === 'head_office' : s.type === 'head_office'))
+  const seatLabel = (s) => `${s.positionName}${s.projectName ? ` · ${s.projectName}` : ' · Head Office'} — ${s.userName}`
+  function pickSeat(key) {
+    const s = seats.find((x) => `${x.positionId}|${x.projectId || ''}|${x.userId}` === key)
+    setForm({ ...form, positionKey: key, assignedTo: s ? s.userId : '' })
+  }
+  const holderLabel = (u) => {
+    const mine = seats.filter((s) => s.userId === u.id && (!form.projectId || s.projectId === form.projectId || s.type === 'head_office'))
+    return mine.length ? `${u.name} · ${mine.map((s) => s.positionName).join(', ')}` : `${u.name} · Position not assigned`
+  }
+
   return (
     <Layout title={user.role === 'employee' ? 'My Tasks' : 'Tasks'} subtitle="Track and move work through the workflow">
       {canManage && (
@@ -200,10 +217,13 @@ export default function Tasks() {
                         className="input !w-auto min-w-0 max-w-[60vw] !py-0.5 text-xs"
                       >
                         {!teamFor(t.department).some((u) => u.id === t.assignedTo) && <option value={t.assignedTo}>{t.assignedToName}</option>}
-                        {teamFor(t.department).map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+                        {teamFor(t.department).map((u) => {
+                          const pos = seats.find((x) => x.userId === u.id && (x.projectId === t.projectId || x.type === 'head_office'))
+                          return <option key={u.id} value={u.id}>{u.name}{pos ? ` · ${pos.positionName}` : ' · Position not assigned'}</option>
+                        })}
                       </select>
                     ) : (
-                      <span className="font-semibold text-slate-600 dark:text-slate-300">{t.assignedToName}</span>
+                      <span className="font-semibold text-slate-600 dark:text-slate-300">{t.assignedToName}{t.assignedToPosition ? ` · ${t.assignedToPosition}` : ''}{t.projectName ? ` · ${t.projectName}` : ''}</span>
                     )}
                   </div>
                 </div>
@@ -278,7 +298,7 @@ export default function Tasks() {
                   required
                   disabled={!user.isGlobalAdmin}
                   value={form.department}
-                  onChange={(e) => setForm({ ...form, department: e.target.value, assignedTo: '', projectId: '' })}
+                  onChange={(e) => setForm({ ...form, department: e.target.value, assignedTo: '', projectId: '', positionKey: '' })}
                   className="input"
                 >
                   <option value="">Select department...</option>
@@ -286,21 +306,37 @@ export default function Tasks() {
                 </select>
               </label>
               <label className="block">
-                <span className="mb-1 block text-xs font-semibold text-slate-500">Responsible person</span>
-                <select required disabled={!form.department} value={form.assignedTo} onChange={(e) => setForm({ ...form, assignedTo: e.target.value })} className="input">
-                  <option value="">{form.department ? 'Select a person...' : 'Pick a department first'}</option>
-                  {teamFor(form.department).map((u) => <option key={u.id} value={u.id}>{u.name} — {u.role}</option>)}
-                </select>
-              </label>
-              <label className="block">
                 <span className="mb-1 block text-xs font-semibold text-slate-500">Project</span>
-                <select value={form.projectId} onChange={(e) => setForm({ ...form, projectId: e.target.value })} className="input">
-                  <option value="">No linked project</option>
+                <select value={form.projectId} onChange={(e) => setForm({ ...form, projectId: e.target.value, positionKey: '', assignedTo: '' })} className="input">
+                  <option value="">No linked project (Head Office work)</option>
                   {projects.filter((p) => !form.department || p.department === form.department).map((p) => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
               </label>
+              <label className="block">
+                <span className="mb-1 block text-xs font-semibold text-slate-500">Responsible position</span>
+                <select disabled={!form.department} value={form.positionKey} onChange={(e) => pickSeat(e.target.value)} className="input">
+                  <option value="">{form.department ? (form.projectId ? 'Select a position on this project...' : 'Select a Head Office position...') : 'Pick a department first'}</option>
+                  {seatOptions.map((s) => (
+                    <option key={`${s.positionId}|${s.projectId || ''}|${s.userId}`} value={`${s.positionId}|${s.projectId || ''}|${s.userId}`}>{seatLabel(s)}</option>
+                  ))}
+                  <option value="__person">Someone else (choose a person)</option>
+                </select>
+              </label>
+              {form.positionKey === '__person' ? (
+                <label className="block">
+                  <span className="mb-1 block text-xs font-semibold text-slate-500">Assigned user</span>
+                  <select required value={form.assignedTo} onChange={(e) => setForm({ ...form, assignedTo: e.target.value })} className="input">
+                    <option value="">Select a person...</option>
+                    {teamFor(form.department).map((u) => <option key={u.id} value={u.id}>{holderLabel(u)}</option>)}
+                  </select>
+                </label>
+              ) : form.assignedTo ? (
+                <p className="rounded-lg bg-brand-50 dark:bg-brand-500/10 px-3 py-2 text-xs text-brand-700 dark:text-brand-300">
+                  Assigned to {users.find((u) => u.id === form.assignedTo)?.name || seats.find((s) => s.userId === form.assignedTo)?.userName}
+                </p>
+              ) : null}
               <div className="grid grid-cols-2 gap-3">
                 <label className="block">
                   <span className="mb-1 block text-xs font-semibold text-slate-500">Priority</span>
