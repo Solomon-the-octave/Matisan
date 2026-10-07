@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { rows, row, query, generateId } from '../db.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { canAccessProject } from './projects.js';
+import { recordWeeklyHandIn, returnWeekToField } from './approvals.js';
 
 const router = Router();
 
@@ -111,6 +112,8 @@ router.post('/', requireAuth, async (req, res) => {
       [id, projectId, project.department, type, start, end, req.user.id, cleanNote, totals.workers, totals.days, totals.ot]
     );
   }
+  // The week's hand-in is step 1 (Prepared By) of the approval path.
+  if (type === 'weekly') await recordWeeklyHandIn(projectId, start, end, req.user.id);
   res.status(201).json({ submission: await row(`${SELECT} WHERE s.id = $1`, [id]) });
 });
 
@@ -126,6 +129,10 @@ async function review(req, res, status) {
   const reviewNote = req.body.note ? String(req.body.note).slice(0, 500) : null;
   if (status === 'returned' && !reviewNote) {
     return res.status(400).json({ error: 'Add a note so the team knows what to fix' });
+  }
+  if (status === 'returned' && sub.type === 'weekly') {
+    const back = await returnWeekToField(sub.projectId, sub.periodStart, sub.periodEnd, req.user.id, reviewNote);
+    if (!back.ok) return res.status(409).json({ error: back.error });
   }
   await query(
     `UPDATE attendance_submissions SET status = $1, "reviewedBy" = $2, "reviewedAt" = now(), "reviewNote" = $3 WHERE id = $4`,

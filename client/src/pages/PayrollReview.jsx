@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, Send, RotateCcw, Wallet, Download } from 'lucide-react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Send, RotateCcw, Wallet, Download, ListChecks, ChevronUp } from 'lucide-react'
 import Layout from '../components/Layout'
 import Badge from '../components/Badge'
 import ScrollHint from '../components/ScrollHint'
+import ApprovalTrail from '../components/ApprovalTrail'
 import api from '../api'
 import { useAuth } from '../context/AuthContext'
 
@@ -40,29 +41,31 @@ function fmt(d) {
 }
 
 const STATUS_LABEL = {
-  submitted: 'Submitted — awaiting Finance',
-  finance_checked: 'Finance-checked — awaiting approval',
-  approved: 'Approved & locked',
+  submitted: 'At site checks',
+  in_review: 'With head office — week locked',
+  paid: 'Paid — all steps complete',
 }
 
 export default function PayrollReview() {
   const { user } = useAuth()
   const [projects, setProjects] = useState([])
   const [periods, setPeriods] = useState([])
+  const [steps, setSteps] = useState([])
+  const [expanded, setExpanded] = useState(null)
   const [payrollByPeriod, setPayrollByPeriod] = useState({})
   const [busyId, setBusyId] = useState(null)
   const [error, setError] = useState('')
   const { weekStart, weekEnd } = useMemo(() => weekRange(), [])
 
   const canSubmit = user.role === 'supervisor' || user.role === 'admin'
-  const canFinanceCheck = user.role === 'finance' || user.role === 'admin'
-  const canApprove = user.role === 'admin'
+  const canReopen = user.role === 'admin'
 
   async function load() {
     const [p, pp] = await Promise.all([api.get('/projects'), api.get('/payroll-periods')])
     setProjects(p.data.projects)
     const sorted = [...pp.data.periods].sort((a, b) => b.weekStart.localeCompare(a.weekStart))
     setPeriods(sorted)
+    setSteps(pp.data.steps || [])
     const entries = await Promise.all(
       sorted.map(async (period) => {
         const res = await api.get('/worker-attendance/payroll', {
@@ -95,11 +98,12 @@ export default function PayrollReview() {
     }
   }
 
-  async function act(period, action) {
+  async function reopen(period) {
+    if (!confirm('Send this week back to the site checks? It will unlock for correction.')) return
     setBusyId(period.id)
     setError('')
     try {
-      await api.put(`/payroll-periods/${period.id}/${action}`)
+      await api.put(`/payroll-periods/${period.id}/reopen`)
       await load()
     } catch (e) {
       setError(e.response?.data?.error || 'Could not update this period')
@@ -109,7 +113,7 @@ export default function PayrollReview() {
   }
 
   return (
-    <Layout title="Payroll Review" subtitle="The digital sign-off chain: Submitted -> Finance-checked -> Approved">
+    <Layout title="Payroll Review" subtitle="The weekly sign-off, step by step, from the Time Keeper to payment">
       {error && <p className="mb-4 text-sm font-medium text-rose-600 dark:text-rose-400">{error}</p>}
 
       {canSubmit && (
@@ -163,12 +167,18 @@ export default function PayrollReview() {
             {periods.map((period) => {
               const totals = payrollByPeriod[period.id]
               return (
-                <tr key={period.id}>
+                <Fragment key={period.id}>
+                <tr>
                   <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-200">{projectName(period.projectId)}</td>
                   <td className="px-4 py-3 text-slate-500">{fmt(period.weekStart)} – {fmt(period.weekEnd)}</td>
                   <td className="px-4 py-3">
                     <Badge value={period.status} />
                     <div className="mt-0.5 text-[11px] text-slate-400">{STATUS_LABEL[period.status]}</div>
+                    {period.currentStep <= steps.length && steps[period.currentStep - 1] && (
+                      <div className="text-[11px] text-slate-400">
+                        Step {period.currentStep} of {steps.length}: {steps[period.currentStep - 1].label} ({steps[period.currentStep - 1].name})
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-slate-500">
                     {totals ? (
@@ -206,35 +216,33 @@ export default function PayrollReview() {
                     </div>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    {period.status === 'submitted' && canFinanceCheck && (
+                    <div className="flex flex-col items-end gap-1.5">
                       <button
-                        onClick={() => act(period, 'finance-check')}
-                        disabled={busyId === period.id}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+                        onClick={() => setExpanded(expanded === period.id ? null : period.id)}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700"
                       >
-                        <CheckCircle2 size={13} /> Mark checked
+                        {expanded === period.id ? <ChevronUp size={13} /> : <ListChecks size={13} />} {expanded === period.id ? 'Hide' : 'Approval steps'}
                       </button>
-                    )}
-                    {period.status === 'finance_checked' && canApprove && (
-                      <button
-                        onClick={() => act(period, 'approve')}
-                        disabled={busyId === period.id}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
-                      >
-                        <CheckCircle2 size={13} /> Approve
-                      </button>
-                    )}
-                    {period.status === 'approved' && canApprove && (
-                      <button
-                        onClick={() => act(period, 'reopen')}
-                        disabled={busyId === period.id}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-60"
-                      >
-                        <RotateCcw size={13} /> Reopen
-                      </button>
-                    )}
+                      {period.status !== 'submitted' && canReopen && (
+                        <button
+                          onClick={() => reopen(period)}
+                          disabled={busyId === period.id}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-60"
+                        >
+                          <RotateCcw size={13} /> Reopen
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
+                {expanded === period.id && (
+                  <tr>
+                    <td colSpan={6} className="bg-slate-50/60 dark:bg-slate-800/40 px-4 py-4">
+                      <ApprovalTrail periodId={period.id} onChange={load} />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               )
             })}
             {periods.length === 0 && (

@@ -7,6 +7,7 @@ import {
 import Layout from '../components/Layout'
 import StatCard from '../components/StatCard'
 import Badge from '../components/Badge'
+import WaitingForYou from '../components/WaitingForYou'
 import api from '../api'
 import { useAuth } from '../context/AuthContext'
 
@@ -17,9 +18,7 @@ export default function Dashboard() {
   const [projects, setProjects] = useState([])
   const [tasks, setTasks] = useState([])
   const [busy, setBusy] = useState(false)
-  const [payrollPeriods, setPayrollPeriods] = useState([])
   const [sitePayroll, setSitePayroll] = useState(null)
-  const [signingId, setSigningId] = useState(null)
   const [handedIn, setHandedIn] = useState([])
 
   async function load() {
@@ -32,19 +31,16 @@ export default function Dashboard() {
     const wantsSubmissions = user.role === 'admin' || user.role === 'supervisor'
     if (wantsSubmissions) calls.push(api.get('/attendance-submissions', { params: { status: 'submitted' } }))
     if (user.role === 'admin') {
-      calls.push(api.get('/payroll-periods'))
       calls.push(api.get('/worker-attendance/payroll', { params: { from: today, to: today } }))
     }
     const results = await Promise.all(calls)
     const [s, p, t] = results
     let i = 3
     if (wantsSubmissions) setHandedIn(results[i++].data.submissions)
-    const pp = user.role === 'admin' ? results[i++] : undefined
     const site = user.role === 'admin' ? results[i++] : undefined
     setSummary(s.data)
     setProjects(p.data.projects)
     setTasks(t.data.tasks)
-    if (pp) setPayrollPeriods(pp.data.periods)
     if (site) setSitePayroll(site.data)
   }
 
@@ -52,18 +48,6 @@ export default function Dashboard() {
     load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
-  async function signApprove(periodId) {
-    setSigningId(periodId)
-    try {
-      await api.put(`/payroll-periods/${periodId}/approve`)
-      await load()
-    } catch (e) {
-      alert(e.response?.data?.error || 'Could not approve this period')
-    } finally {
-      setSigningId(null)
-    }
-  }
 
   async function handleCheckIn() {
     setBusy(true)
@@ -110,6 +94,7 @@ export default function Dashboard() {
   if (user.role === 'admin') {
     return (
       <Layout title="Welcome back, System!" subtitle="Here's what's happening across Matisan today">
+        <WaitingForYou />
         <div className="mb-6 flex justify-end gap-2">
           <button onClick={downloadReport} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
             <Download size={15} /> Download Report
@@ -149,49 +134,6 @@ export default function Dashboard() {
         <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
           <StatCard label="Site Workers On Today" value={sitePayroll?.totals.workers ?? 0} icon={HardHat} />
           <StatCard label="Today's Labor Cost" value={(sitePayroll?.totals.cost ?? 0).toLocaleString()} icon={Wallet} />
-          <StatCard
-            label="Awaiting Your Signature"
-            value={payrollPeriods.filter((pp) => pp.status === 'finance_checked').length}
-            icon={PenLine}
-          />
-        </div>
-
-        {/* Documents Finance has checked and handed to the admin for final
-            sign-off — the digital equivalent of the "Approved by" line on
-            the paper payroll sheet. */}
-        <div className="mt-6 surface p-4 shadow-sm">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">Awaiting Your Signature</h3>
-            <button onClick={() => navigate('/payroll-review')} className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline">Review all &rarr;</button>
-          </div>
-          {payrollPeriods.filter((pp) => pp.status === 'finance_checked').length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8 text-center">
-              <CheckCircle2 className="mb-2 text-emerald-400" size={26} />
-              <p className="text-sm font-medium text-slate-500">Nothing waiting on your signature</p>
-            </div>
-          ) : (
-            <div className="divide-y divide-slate-100 dark:divide-slate-800">
-              {payrollPeriods
-                .filter((pp) => pp.status === 'finance_checked')
-                .map((pp) => (
-                  <div key={pp.id} className="flex items-center justify-between gap-3 py-2.5">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold text-slate-700 dark:text-slate-200">
-                        {projects.find((p) => p.id === pp.projectId)?.name || pp.projectId}
-                      </div>
-                      <div className="text-xs text-slate-400">{pp.weekStart} – {pp.weekEnd} · checked by Finance</div>
-                    </div>
-                    <button
-                      onClick={() => signApprove(pp.id)}
-                      disabled={signingId === pp.id}
-                      className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
-                    >
-                      <PenLine size={13} /> {signingId === pp.id ? 'Signing...' : 'Sign & Approve'}
-                    </button>
-                  </div>
-                ))}
-            </div>
-          )}
         </div>
 
         <div className="mt-6 grid gap-4 lg:grid-cols-2">
@@ -226,6 +168,7 @@ export default function Dashboard() {
     const attention = tasks.filter((t) => t.status === 'submitted')
     return (
       <Layout title="Supervisor Dashboard" subtitle="Manage your team and track project progress.">
+        <WaitingForYou />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <StatCard label="My Projects" value={summary.totalProjects} icon={Users} />
           <StatCard label="Tasks to Review" value={summary.tasksToReview} icon={ClipboardList} />
@@ -279,13 +222,14 @@ export default function Dashboard() {
 
   if (user.role === 'finance') {
     return (
-      <Layout title="Finance Dashboard" subtitle="Review submitted payroll periods and sign off on approved weeks.">
+      <Layout title="Finance Dashboard" subtitle="Check payroll and complete your steps in the sign-off.">
+        <WaitingForYou />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <StatCard label="Projects" value={summary.totalProjects} icon={FolderKanban} />
           <StatCard label="Active Projects" value={summary.activeProjects} icon={CheckCircle2} />
         </div>
         <div className="mt-6 surface p-6 text-center shadow-sm">
-          <p className="mb-3 text-sm text-slate-500">Payroll periods submitted by supervisors are reviewed here.</p>
+          <p className="mb-3 text-sm text-slate-500">Weekly payroll sign-off is tracked in Payroll Review.</p>
           <button onClick={() => navigate('/payroll-review')} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-700">
             <ClipboardList size={15} /> Go to Payroll Review
           </button>
@@ -297,6 +241,7 @@ export default function Dashboard() {
   // employee
   return (
     <Layout title="My Dashboard" subtitle="Track your tasks and attendance.">
+      <WaitingForYou />
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard label="My Tasks" value={summary.myTasks} icon={ClipboardList} />
         <StatCard label="Completed Today" value={summary.myTasksCompletedToday} icon={CheckCircle2} />

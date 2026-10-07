@@ -252,3 +252,30 @@ INSERT INTO positions (id, name, type, level, "parentId", "sortOrder") VALUES
   ('time-keeper',          'Time Keeper',             'site', 3, 'site-finance',         8),
   ('store-keeper',         'Store Keeper',            'site', 3, 'site-finance',         9)
 ON CONFLICT (id) DO NOTHING;
+
+-- ---------------------------------------------------------------------------
+-- Paper "critical path": the 10-step sign-off for a week's payroll, kept as
+-- an append-only log of who did what. Where a week stands (currentStep) and
+-- its status are worked out from this log:
+--   submitted  = steps 1-3 (site: Time Keeper, Foreman, Site Engineer)
+--   in_review  = steps 4-10 (head office) — the week is locked for the field
+--   paid       = all 10 steps done
+-- ---------------------------------------------------------------------------
+ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "currentStep" integer NOT NULL DEFAULT 1;
+
+CREATE TABLE IF NOT EXISTS approval_records (
+  id           text PRIMARY KEY,
+  "periodId"   text NOT NULL REFERENCES payroll_periods(id) ON DELETE CASCADE,
+  step         integer NOT NULL,
+  "positionId" text,
+  "userId"     text NOT NULL REFERENCES users(id),
+  action       text NOT NULL CHECK (action IN ('completed', 'returned')),
+  "toStep"     integer,
+  comment      text,
+  "actionDate" timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS approval_records_period_idx ON approval_records ("periodId", "actionDate");
+
+-- One-time carry-over of weeks signed off under the old 3-stage chain.
+UPDATE payroll_periods SET status = 'in_review', "currentStep" = 10 WHERE status = 'approved';
+UPDATE payroll_periods SET status = 'in_review', "currentStep" = 9 WHERE status = 'finance_checked';

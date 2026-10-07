@@ -230,8 +230,9 @@ export default function FieldAttendance() {
 
   async function loadPeriodStatus(pid) {
     if (!pid) return
-    const res = await api.get('/payroll-periods', { params: { projectId: pid, status: 'approved' } })
-    const current = res.data.periods.find((p) => p.weekStart === weekStart && p.weekEnd === weekEnd)
+    const res = await api.get('/payroll-periods', { params: { projectId: pid } })
+    // Locked once the week is past the site checks (with head office, or paid).
+    const current = res.data.periods.find((p) => p.weekStart === weekStart && p.weekEnd === weekEnd && p.status !== 'submitted')
     setWeekLocked(!!current)
   }
 
@@ -457,7 +458,7 @@ export default function FieldAttendance() {
 
       {weekLocked && (
         <div className="mb-4 flex items-center gap-2 rounded-lg bg-slate-100 dark:bg-slate-700 px-4 py-2.5 text-sm font-semibold text-slate-600 dark:text-slate-300 ring-1 ring-inset ring-slate-200 dark:ring-slate-700">
-          <Lock size={14} /> This week has been approved and is locked — attendance can't be changed. Ask an admin to reopen it if something needs fixing.
+          <Lock size={14} /> This week has passed the site checks and is with head office — attendance is locked. Ask an admin to reopen it if something needs fixing.
         </div>
       )}
 
