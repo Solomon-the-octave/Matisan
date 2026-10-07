@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { Send, RotateCcw, Wallet, Download, ListChecks, ChevronUp } from 'lucide-react'
+import { Printer, Send, RotateCcw, Wallet, Download, ListChecks, ChevronUp } from 'lucide-react'
 import Layout from '../components/Layout'
 import Badge from '../components/Badge'
 import ScrollHint from '../components/ScrollHint'
@@ -85,6 +85,19 @@ export default function PayrollReview() {
 
   const awaiting = periods.filter((p) => p.status === 'in_review' && p.currentStep === steps.length)
   const paidList = periods.filter((p) => p.status === 'paid')
+  function exportList() {
+    const cell = (v) => { let t = v == null ? '' : String(v); if (/^[=+\-@\t\r]/.test(t)) t = `'${t}`; return `"${t.replace(/"/g, '""')}"` }
+    const head = ['Request no', 'Project', 'Week start', 'Week end', 'Status', 'Payroll total (ETB)', 'Amount paid (ETB)', 'Paid date']
+    const lines = shown.map((p) => [p.requestNo, p.projectName, p.weekStart, p.weekEnd, p.status, p.payrollTotal, p.amountPaid, p.paidDate])
+    const csv = [head, ...lines].map((r) => r.map(cell).join(',')).join('\r\n')
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `payroll-requests-${filter}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const shown = periods.filter((p) => filter === 'all' || (filter === 'awaiting' && awaiting.includes(p)) || (filter === 'paid' && p.status === 'paid'))
   const awaitingAmount = awaiting.reduce((a, p) => a + (p.payrollTotal || 0), 0)
   const showMoney = periods.some((p) => p.payrollTotal !== undefined)
@@ -173,9 +186,11 @@ export default function PayrollReview() {
 
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">All payroll periods</h3>
-        <div className="flex gap-1.5">
+        <div className="flex flex-wrap gap-1.5">
+          <button onClick={exportList} className="no-print inline-flex min-h-[36px] items-center gap-1 rounded-full border border-slate-200 dark:border-slate-700 px-3 text-xs font-semibold text-slate-500 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"><Download size={12} /> Download list</button>
+          <button onClick={() => window.print()} className="no-print inline-flex min-h-[36px] items-center gap-1 rounded-full border border-slate-200 dark:border-slate-700 px-3 text-xs font-semibold text-slate-500 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"><Printer size={12} /> Print</button>
           {[['all', 'All'], ['awaiting', 'Awaiting payment'], ['paid', 'Paid']].map(([k, l]) => (
-            <button key={k} onClick={() => setFilter(k)} className={`min-h-[36px] rounded-full px-3 text-xs font-semibold ${filter === k ? 'bg-brand-600 text-white' : 'border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>{l}</button>
+            <button key={k} onClick={() => setFilter(k)} className={`no-print min-h-[36px] rounded-full px-3 text-xs font-semibold ${filter === k ? 'bg-brand-600 text-white' : 'border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>{l}</button>
           ))}
         </div>
       </div>
@@ -250,7 +265,7 @@ export default function PayrollReview() {
                       </button>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="no-print px-4 py-3 text-right">
                     <div className="flex flex-col items-end gap-1.5">
                       <button
                         onClick={() => setExpanded(expanded === period.id ? null : period.id)}

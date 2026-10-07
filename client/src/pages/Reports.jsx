@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Download, FolderKanban, CheckCircle2, ClipboardList, CalendarCheck, FileSpreadsheet } from 'lucide-react'
+import { Printer, Download, FolderKanban, CheckCircle2, ClipboardList, CalendarCheck, FileSpreadsheet } from 'lucide-react'
 import Layout from '../components/Layout'
 import StatCard from '../components/StatCard'
 import api from '../api'
@@ -119,6 +119,7 @@ function HrReports() {
       <div className="mt-4 flex flex-wrap gap-2">
         <button onClick={run} disabled={busy} className="min-h-[40px] rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">{busy ? 'Loading...' : 'Show report'}</button>
         <button onClick={csv} className="inline-flex min-h-[40px] items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-4 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"><Download size={14} /> Download CSV</button>
+        <button onClick={() => window.print()} disabled={!result} className="no-print inline-flex min-h-[40px] items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 px-4 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"><Printer size={14} /> Print</button>
       </div>
       {error && <p className="mt-3 text-sm font-medium text-rose-600 dark:text-rose-400">{error}</p>}
       {result && (
@@ -171,7 +172,10 @@ export default function Reports() {
 
   return (
     <Layout title="Reports" subtitle="Company-wide analytics and exports">
-      <div className="mb-6 flex justify-end">
+      <div className="no-print mb-6 flex justify-end gap-2">
+        <button onClick={() => window.print()} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
+          <Printer size={15} /> Print
+        </button>
         <button onClick={download} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
           <Download size={15} /> Download CSV Report
         </button>

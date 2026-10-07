@@ -146,3 +146,17 @@ input[type='range']::-moz-range-track {
   border-radius: 9999px;
   background: transparent;
 }
+
+/* Printing: hide navigation, show a plain black-on-white page with a title block. */
+.print-only { display: none; }
+@media print {
+  aside, header, .no-print { display: none !important; }
+  .print-only { display: block !important; }
+  .app-shell, .app-col, .app-main { display: block !important; height: auto !important; overflow: visible !important; }
+  html, body { background: #fff !important; }
+  .dark main, .dark main * { background: #fff !important; color: #111 !important; border-color: #ccc !important; }
+  .overflow-x-auto { overflow: visible !important; }
+  table { font-size: 11px; }
+  tr { break-inside: avoid; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle2, Circle, CornerUpLeft, Loader2, Banknote, Paperclip } from 'lucide-react'
+import { CheckCircle2, Circle, CornerUpLeft, Loader2, Banknote, Paperclip, Printer } from 'lucide-react'
 import api from '../api'
 
 // The paper "critical path" for one week of payroll: Prepared, Checked,
@@ -93,6 +93,7 @@ export default function ApprovalTrail({ periodId, onChange }) {
         <span className="font-semibold text-slate-700 dark:text-slate-200">{period.projectName}</span>
         <span>{fmtDate(period.weekStart)} – {fmtDate(period.weekEnd)}</span>
         {payrollTotal != null && <span>Payroll total <b className="text-slate-700 dark:text-slate-200">{money(payrollTotal)}</b> ETB</span>}
+        <button type="button" onClick={() => window.print()} className="no-print ml-auto inline-flex items-center gap-1 rounded-md border border-slate-200 dark:border-slate-700 px-2 py-1 font-semibold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"><Printer size={12} /> Print</button>
       </div>
       <ol className="space-y-0">
         {steps.map((s, i) => {

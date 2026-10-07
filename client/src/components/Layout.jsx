@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Building2, Users, FolderKanban, ListChecks,
   CalendarCheck, FileBarChart, UserCircle, LogOut, Bell, Menu, X, HardHat, ClipboardCheck,
-  Sun, Moon, Network, ShieldCheck,
+  Sun, Moon, Network, ShieldCheck, Printer,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import api from '../api'
@@ -140,7 +140,7 @@ export default function Layout({ children, title, subtitle }) {
   )
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950">
+    <div className="app-shell flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950">
       {/* Desktop sidebar */}
       <aside className="hidden w-64 flex-col border-r border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 md:flex">
         {SidebarContent}
@@ -162,7 +162,7 @@ export default function Layout({ children, title, subtitle }) {
         </div>
       )}
 
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="app-col flex flex-1 flex-col overflow-hidden">
         <header className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 px-4 py-3.5 backdrop-blur md:px-6">
           <div className="flex items-center gap-3">
             <button className="text-slate-500 md:hidden" onClick={() => setMobileOpen(true)}>
@@ -180,10 +180,21 @@ export default function Layout({ children, title, subtitle }) {
             <span className="hidden rounded-full bg-slate-50 dark:bg-slate-800 px-3 py-1 text-[11px] font-semibold text-slate-500 ring-1 ring-inset ring-slate-200 dark:ring-slate-700 sm:inline-block">
               {ROLE_LABEL[user?.role] || user?.role}
             </span>
+            {['admin', 'finance', 'supervisor'].includes(user?.role) && (
+              <button onClick={() => window.print()} title="Print this page" aria-label="Print this page" className="no-print hidden rounded-lg border border-slate-200 dark:border-slate-700 p-2 text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 sm:block">
+                <Printer size={16} />
+              </button>
+            )}
             <NotificationBell />
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
+        <main className="app-main flex-1 overflow-y-auto p-4 md:p-6">
+          <div className="print-only mb-4 border-b border-slate-300 pb-2">
+            <div className="text-base font-bold">Matisan Engineering Private Ltd Co. — {title}</div>
+            <div className="text-xs">Printed {new Date().toLocaleString()} by {user?.name}</div>
+          </div>
+          {children}
+        </main>
       </div>
     </div>
   )
