@@ -8,6 +8,8 @@ function initials(name) {
 }
 
 function PositionCard({ node, users, onAssign }) {
+  // The Project Manager must be a supervisor or admin; every other seat can be held by anyone.
+  const pickable = node.id === 'site-project-manager' ? users.filter((u) => ['supervisor', 'admin'].includes(u.role)) : users
   return (
     <div className="surface flex flex-col gap-2 p-3 shadow-sm">
       <div className="flex items-center gap-2.5">
@@ -33,8 +35,8 @@ function PositionCard({ node, users, onAssign }) {
           className="input !py-1 text-xs"
         >
           <option value="">Not assigned</option>
-          {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-          {node.userId && !users.some((u) => u.id === node.userId) && <option value={node.userId}>{node.userName}</option>}
+          {pickable.map((u) => <option key={u.id} value={u.id}>{u.name}{u.title ? ` — ${u.title}` : ` (${u.role})`}</option>)}
+          {node.userId && !pickable.some((u) => u.id === node.userId) && <option value={node.userId}>{node.userName}</option>}
         </select>
       )}
     </div>

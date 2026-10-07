@@ -339,7 +339,7 @@ export default function Projects() {
                   <TeamTree
                     stacked
                     nodes={teamByProject[p.id]}
-                    users={users.filter((u) => u.department === p.department || u.role === 'admin')}
+                    users={users}
                     onAssign={user.role === 'admin' ? (positionId, userId) => assignPosition(p.id, positionId, userId) : undefined}
                   />
                 </div>
