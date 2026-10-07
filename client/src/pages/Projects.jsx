@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Plus, X, MapPin, UserCog, FileText, Upload, Download, Trash2, Loader2, Network } from 'lucide-react'
+import { Plus, X, MapPin, UserCog, FileText, Upload, Download, Trash2, Loader2, Network, Pencil } from 'lucide-react'
 import Layout from '../components/Layout'
 import Badge from '../components/Badge'
 import TeamTree from '../components/TeamTree'
@@ -26,6 +26,7 @@ export default function Projects() {
   const [departments, setDepartments] = useState([])
   const [users, setUsers] = useState([])
   const [showForm, setShowForm] = useState(false)
+  const [editingId, setEditingId] = useState(null) // project being edited in the form (null = creating)
   const [form, setForm] = useState(emptyForm)
   const [assignFor, setAssignFor] = useState(null) // project being edited in the assign panel
   const [docsFor, setDocsFor] = useState(null) // project whose documents panel is open
@@ -131,11 +132,55 @@ export default function Projects() {
   const userName = (id) => users.find((u) => u.id === id)?.name
   const managersFor = (dept) => users.filter((u) => ['supervisor', 'admin'].includes(u.role) && (u.isGlobalAdmin || u.department === dept))
 
+  function openNew() {
+    setEditingId(null)
+    setForm({ ...emptyForm, department: user.isGlobalAdmin ? '' : user.department })
+    setPendingFiles([])
+    setFormError('')
+    setShowForm(true)
+  }
+
+  function openEdit(p) {
+    setEditingId(p.id)
+    setForm({
+      name: p.name || '', projectNumber: p.projectNumber || '', site: p.site || '', client: p.client || '',
+      contractor: p.contractor || '', consultant: p.consultant || '', department: p.department,
+      description: p.description || '', managerId: p.managerId || '', priority: p.priority || 'medium',
+      startDate: p.startDate || today(), endDate: p.endDate || '',
+    })
+    setPendingFiles([])
+    setFormError('')
+    setShowForm(true)
+  }
+
+  function closeForm() {
+    setShowForm(false)
+    setEditingId(null)
+    setFormError('')
+  }
+
+  async function removeProject(p) {
+    if (!confirm(`Delete "${p.name}"? Its tasks, documents and team assignments will be removed. This cannot be undone.`)) return
+    try {
+      await api.delete(`/projects/${p.id}`)
+      await load()
+    } catch (err) {
+      alert(err.response?.data?.error || 'Could not delete the project')
+    }
+  }
+
   async function submit(e) {
     e.preventDefault()
     setFormError('')
     setSaving(true)
     try {
+      if (editingId) {
+        const { department, ...rest } = form
+        await api.put(`/projects/${editingId}`, { ...rest, managerId: form.managerId || undefined, endDate: form.endDate || undefined })
+        closeForm()
+        await load()
+        return
+      }
       const payload = { ...form, managerId: form.managerId || undefined, endDate: form.endDate || undefined }
       const res = await api.post('/projects', payload)
       const failed = []
@@ -154,7 +199,7 @@ export default function Projects() {
       await load()
       if (failed.length) alert(`Project created, but these files didn't upload: ${failed.join(', ')}. Add them from the Documents panel.`)
     } catch (err) {
-      setFormError(err.response?.data?.error || 'Could not create the project')
+      setFormError(err.response?.data?.error || (editingId ? 'Could not save the changes' : 'Could not create the project'))
     } finally {
       setSaving(false)
     }
@@ -191,7 +236,7 @@ export default function Projects() {
     <Layout title="Projects" subtitle="Track large-scale sites and their progress">
       {canManage && (
         <div className="mb-4 flex justify-end">
-          <button onClick={() => setShowForm(true)} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
+          <button onClick={openNew} className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700">
             <Plus size={15} /> New Project
           </button>
         </div>
@@ -208,7 +253,19 @@ export default function Projects() {
                 </p>
               </div>
               <div className="flex shrink-0 flex-col items-end gap-1">
-                <Badge value={p.status} />
+                <div className="flex items-center gap-1">
+                  {canManage && (
+                    <button onClick={() => openEdit(p)} title="Edit project" aria-label="Edit project" className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-brand-600">
+                      <Pencil size={14} />
+                    </button>
+                  )}
+                  {user.role === 'admin' && (
+                    <button onClick={() => removeProject(p)} title="Delete project" aria-label="Delete project" className="rounded-md p-1.5 text-slate-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 hover:text-rose-600">
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                  <Badge value={p.status} />
+                </div>
                 {p.priority && (
                   <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold capitalize ${PRIORITY_STYLE[p.priority] || PRIORITY_STYLE.medium}`}>
                     {p.priority} priority
@@ -387,8 +444,8 @@ export default function Projects() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
           <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white dark:bg-slate-900 p-5 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">New Project</h3>
-              <button onClick={() => setShowForm(false)} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"><X size={18} /></button>
+              <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">{editingId ? 'Edit Project' : 'New Project'}</h3>
+              <button onClick={closeForm} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"><X size={18} /></button>
             </div>
             <form onSubmit={submit} className="space-y-3">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -407,6 +464,7 @@ export default function Projects() {
                   required
                   disabled={!user.isGlobalAdmin}
                   value={form.department}
+                  disabled={!!editingId}
                   onChange={(e) => setForm({ ...form, department: e.target.value, managerId: '' })}
                   className="input"
                 >
@@ -448,6 +506,7 @@ export default function Projects() {
               </div>
               <textarea placeholder="Description, scope, notes" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="input" rows={3} />
 
+              {!editingId && (
               <div>
                 <span className="mb-1 block text-xs font-semibold text-slate-500">Attachments (permits, drawings, scope — 15MB each)</span>
                 <div className="space-y-1">
@@ -467,9 +526,11 @@ export default function Projects() {
                 </label>
               </div>
 
+              )}
+
               {formError && <p className="text-sm font-medium text-rose-600 dark:text-rose-400">{formError}</p>}
               <button type="submit" disabled={saving} className="w-full rounded-lg bg-brand-600 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
-                {saving ? 'Creating...' : 'Create Project'}
+                {saving ? (editingId ? 'Saving...' : 'Creating...') : (editingId ? 'Save changes' : 'Create Project')}
               </button>
             </form>
           </div>

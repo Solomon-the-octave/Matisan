@@ -97,7 +97,11 @@ router.put('/:id', requireAuth, requireRole('admin', 'supervisor'), async (req, 
   if (!req.user.isGlobalAdmin && project.department !== req.user.department) {
     return res.status(403).json({ error: 'Outside your department access point' });
   }
-  const { status, progress, description, name, site, endDate, priority, managerId, projectNumber, client, contractor, consultant } = req.body;
+  const { status, progress, description, name, site, startDate, endDate, priority, managerId, projectNumber, client, contractor, consultant } = req.body;
+  if (name !== undefined && !String(name).trim()) return res.status(400).json({ error: 'Project name cannot be empty' });
+  const newStart = startDate || project.startDate;
+  const newEnd = endDate || project.endDate;
+  if (newStart && newEnd && newEnd < newStart) return res.status(400).json({ error: 'End date cannot be before the start date' });
   if (priority && !PRIORITIES.includes(priority)) return res.status(400).json({ error: 'Invalid priority' });
   if (managerId) {
     const err = await checkManager(managerId, project.department);
@@ -116,13 +120,37 @@ router.put('/:id', requireAuth, requireRole('admin', 'supervisor'), async (req, 
        "projectNumber" = COALESCE($9, "projectNumber"),
        client = COALESCE($10, client),
        contractor = COALESCE($11, contractor),
-       consultant = COALESCE($12, consultant)
-     WHERE id = $13`,
+       consultant = COALESCE($12, consultant),
+       "startDate" = COALESCE($13, "startDate")
+     WHERE id = $14`,
     [status ?? null, progress ?? null, description ?? null, name ?? null, site ?? null,
      endDate || null, priority ?? null, managerId || null,
-     projectNumber ?? null, client ?? null, contractor ?? null, consultant ?? null, project.id]
+     projectNumber ?? null, client ?? null, contractor ?? null, consultant ?? null, startDate || null, project.id]
   );
   res.json({ project: await getProject(project.id) });
+});
+
+// Delete a project (admin only). Projects that already have field records
+// (workers, daily attendance or payroll weeks) are protected: that data
+// feeds payroll, so those projects should be closed instead of deleted.
+// Tasks, documents, team and seat assignments go with the project.
+router.delete('/:id', requireAuth, requireRole('admin'), async (req, res) => {
+  const project = await getProject(req.params.id);
+  if (!project) return res.status(404).json({ error: 'Project not found' });
+  const counts = await row(
+    `SELECT (SELECT count(*)::int FROM workers WHERE "projectId" = $1) AS workers,
+            (SELECT count(*)::int FROM worker_attendance WHERE "projectId" = $1) AS attendance,
+            (SELECT count(*)::int FROM payroll_periods WHERE "projectId" = $1) AS periods`,
+    [project.id]
+  );
+  if (counts.workers || counts.attendance || counts.periods) {
+    return res.status(409).json({
+      error: `This project has field records (${counts.workers} workers, ${counts.attendance} attendance entries, ${counts.periods} payroll weeks) so it can't be deleted. Set its status to Completed or On hold instead.`,
+    });
+  }
+  await query('DELETE FROM tasks WHERE "projectId" = $1', [project.id]);
+  await query('DELETE FROM projects WHERE id = $1', [project.id]);
+  res.json({ ok: true });
 });
 
 // Assign or unassign an employee to a project's site team. Only the
