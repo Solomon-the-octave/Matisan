@@ -21,6 +21,7 @@ import payrollPeriodRoutes from './routes/payrollPeriods.js';
 import attendanceSubmissionRoutes from './routes/attendanceSubmissions.js';
 import positionRoutes from './routes/positions.js';
 import approvalRoutes from './routes/approvals.js';
+import dashboardContextRoutes from './routes/dashboardContext.js';
 
 dotenv.config();
 
@@ -54,6 +55,7 @@ app.use('/api/payroll-periods', payrollPeriodRoutes);
 app.use('/api/attendance-submissions', attendanceSubmissionRoutes);
 app.use('/api/positions', positionRoutes);
 app.use('/api/approvals', approvalRoutes);
+app.use('/api/dashboard-context', dashboardContextRoutes);
 
 // In production this one process serves both the API and the built React
 // app — one Render service, one URL, no CORS or separate-origin config to

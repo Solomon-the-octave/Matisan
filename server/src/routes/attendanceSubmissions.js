@@ -19,7 +19,7 @@ const todayStr = () => iso(new Date());
 
 // Monday-Sunday week containing `dateStr` (UTC, same as the rest of the
 // attendance code) — the window of the paper weekly sheet.
-function weekRange(dateStr) {
+export function weekRange(dateStr) {
   const d = new Date(`${dateStr}T00:00:00Z`);
   const day = d.getUTCDay(); // 0 = Sunday
   const monday = new Date(d);

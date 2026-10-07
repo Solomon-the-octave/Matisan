@@ -8,6 +8,7 @@ import Layout from '../components/Layout'
 import StatCard from '../components/StatCard'
 import Badge from '../components/Badge'
 import WaitingForYou from '../components/WaitingForYou'
+import WorkplacePanel from '../components/WorkplacePanel'
 import api from '../api'
 import { useAuth } from '../context/AuthContext'
 
@@ -95,6 +96,7 @@ export default function Dashboard() {
     return (
       <Layout title="Welcome back, System!" subtitle="Here's what's happening across Matisan today">
         <WaitingForYou />
+        <WorkplacePanel />
         <div className="mb-6 flex justify-end gap-2">
           <button onClick={downloadReport} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
             <Download size={15} /> Download Report
@@ -169,6 +171,7 @@ export default function Dashboard() {
     return (
       <Layout title="Supervisor Dashboard" subtitle="Manage your team and track project progress.">
         <WaitingForYou />
+        <WorkplacePanel />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <StatCard label="My Projects" value={summary.totalProjects} icon={Users} />
           <StatCard label="Tasks to Review" value={summary.tasksToReview} icon={ClipboardList} />
@@ -224,6 +227,7 @@ export default function Dashboard() {
     return (
       <Layout title="Finance Dashboard" subtitle="Check payroll and complete your steps in the sign-off.">
         <WaitingForYou />
+        <WorkplacePanel />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <StatCard label="Projects" value={summary.totalProjects} icon={FolderKanban} />
           <StatCard label="Active Projects" value={summary.activeProjects} icon={CheckCircle2} />
@@ -242,6 +246,7 @@ export default function Dashboard() {
   return (
     <Layout title="My Dashboard" subtitle="Track your tasks and attendance.">
       <WaitingForYou />
+      <WorkplacePanel />
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard label="My Tasks" value={summary.myTasks} icon={ClipboardList} />
         <StatCard label="Completed Today" value={summary.myTasksCompletedToday} icon={CheckCircle2} />
