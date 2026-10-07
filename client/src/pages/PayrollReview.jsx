@@ -55,6 +55,7 @@ export default function PayrollReview() {
   const [payrollByPeriod, setPayrollByPeriod] = useState({})
   const [busyId, setBusyId] = useState(null)
   const [error, setError] = useState('')
+  const [filter, setFilter] = useState('all')
   const { weekStart, weekEnd } = useMemo(() => weekRange(), [])
 
   const canSubmit = user.role === 'supervisor' || user.role === 'admin'
@@ -82,6 +83,11 @@ export default function PayrollReview() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const awaiting = periods.filter((p) => p.status === 'in_review' && p.currentStep === steps.length)
+  const paidList = periods.filter((p) => p.status === 'paid')
+  const shown = periods.filter((p) => filter === 'all' || (filter === 'awaiting' && awaiting.includes(p)) || (filter === 'paid' && p.status === 'paid'))
+  const awaitingAmount = awaiting.reduce((a, p) => a + (p.payrollTotal || 0), 0)
+  const showMoney = periods.some((p) => p.payrollTotal !== undefined)
   const projectName = (id) => projects.find((p) => p.id === id)?.name || id
   const periodFor = (projectId) => periods.find((pp) => pp.projectId === projectId && pp.weekStart === weekStart && pp.weekEnd === weekEnd)
 
@@ -149,7 +155,30 @@ export default function PayrollReview() {
         </div>
       )}
 
-      <h3 className="mb-2 text-sm font-bold text-slate-700 dark:text-slate-200">All payroll periods</h3>
+      {showMoney && (
+        <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {[
+            ['In approval', periods.filter((p) => p.status !== 'paid' && !awaiting.includes(p)).length],
+            ['Awaiting payment', awaiting.length],
+            ['Amount awaiting (ETB)', awaitingAmount.toLocaleString()],
+            ['Paid', paidList.length],
+          ].map(([label, value]) => (
+            <div key={label} className="surface px-3 py-2">
+              <div className="text-lg font-bold text-slate-800 dark:text-slate-100">{value}</div>
+              <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">{label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-sm font-bold text-slate-700 dark:text-slate-200">All payroll periods</h3>
+        <div className="flex gap-1.5">
+          {[['all', 'All'], ['awaiting', 'Awaiting payment'], ['paid', 'Paid']].map(([k, l]) => (
+            <button key={k} onClick={() => setFilter(k)} className={`min-h-[36px] rounded-full px-3 text-xs font-semibold ${filter === k ? 'bg-brand-600 text-white' : 'border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'}`}>{l}</button>
+          ))}
+        </div>
+      </div>
       <ScrollHint />
       <div className="overflow-x-auto surface">
         <table className="w-full text-left text-sm">
@@ -164,16 +193,22 @@ export default function PayrollReview() {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-            {periods.map((period) => {
+            {shown.map((period) => {
               const totals = payrollByPeriod[period.id]
               return (
                 <Fragment key={period.id}>
                 <tr>
-                  <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-200">{projectName(period.projectId)}</td>
+                  <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-200">
+                    {projectName(period.projectId)}
+                    {period.requestNo && <div className="text-[11px] font-bold text-brand-600 dark:text-brand-300">{period.requestNo}</div>}
+                  </td>
                   <td className="px-4 py-3 text-slate-500">{fmt(period.weekStart)} – {fmt(period.weekEnd)}</td>
                   <td className="px-4 py-3">
                     <Badge value={period.status} />
                     <div className="mt-0.5 text-[11px] text-slate-400">{STATUS_LABEL[period.status]}</div>
+                    {period.amountPaid != null && (
+                      <div className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">Paid {period.amountPaid.toLocaleString()} ETB</div>
+                    )}
                     {period.currentStep <= steps.length && steps[period.currentStep - 1] && (
                       <div className="text-[11px] text-slate-400">
                         Step {period.currentStep} of {steps.length}: {steps[period.currentStep - 1].label} ({steps[period.currentStep - 1].name})
@@ -245,8 +280,8 @@ export default function PayrollReview() {
                 </Fragment>
               )
             })}
-            {periods.length === 0 && (
-              <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-400">No payroll periods submitted yet</td></tr>
+            {shown.length === 0 && (
+              <tr><td colSpan={6} className="px-4 py-8 text-center text-sm text-slate-400">{periods.length === 0 ? 'No payroll periods submitted yet' : 'Nothing matches this filter'}</td></tr>
             )}
           </tbody>
         </table>

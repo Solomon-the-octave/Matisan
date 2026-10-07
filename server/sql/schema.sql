@@ -279,3 +279,60 @@ CREATE INDEX IF NOT EXISTS approval_records_period_idx ON approval_records ("per
 -- One-time carry-over of weeks signed off under the old 3-stage chain.
 UPDATE payroll_periods SET status = 'in_review', "currentStep" = 10 WHERE status = 'approved';
 UPDATE payroll_periods SET status = 'in_review', "currentStep" = 9 WHERE status = 'finance_checked';
+
+-- ---------------------------------------------------------------------------
+-- Payment request number + payment record (step 10, "Paid By")
+-- ---------------------------------------------------------------------------
+CREATE SEQUENCE IF NOT EXISTS payroll_request_seq START 1;
+ALTER TABLE payroll_periods ADD COLUMN IF NOT EXISTS "requestNo" text;
+DO $$
+DECLARE r record;
+BEGIN
+  FOR r IN SELECT id FROM payroll_periods WHERE "requestNo" IS NULL ORDER BY "submittedAt" NULLS FIRST, "weekStart", id LOOP
+    UPDATE payroll_periods SET "requestNo" = 'PAY-' || lpad(nextval('payroll_request_seq')::text, 4, '0') WHERE id = r.id;
+  END LOOP;
+END $$;
+CREATE UNIQUE INDEX IF NOT EXISTS payroll_periods_request_no_idx ON payroll_periods ("requestNo");
+
+CREATE TABLE IF NOT EXISTS payroll_payments (
+  id            text PRIMARY KEY,
+  "periodId"    text NOT NULL UNIQUE REFERENCES payroll_periods(id) ON DELETE CASCADE,
+  "amountPaid"  numeric(14,2) NOT NULL,
+  "paidDate"    date NOT NULL,
+  reference     text,
+  method        text,
+  "proofName"   text,
+  "proofType"   text,
+  "proofData"   bytea,
+  "paidBy"      text NOT NULL REFERENCES users(id),
+  "createdAt"   timestamptz NOT NULL DEFAULT now()
+);
+
+-- Weeks that were carried forward by the status mapping above (or otherwise
+-- sit past step 1 with no log) get "completed" records for the earlier steps,
+-- so replaying the log gives the same step the week is really at.
+INSERT INTO approval_records (id, "periodId", step, "positionId", "userId", action, comment)
+SELECT 'apr-bf-' || pp.id || '-' || g.s, pp.id, g.s, NULL,
+       COALESCE(pp."submittedBy", pp."financeCheckedBy", pp."approvedBy"), 'completed', 'Carried over from the earlier system'
+FROM payroll_periods pp
+CROSS JOIN LATERAL generate_series(1, pp."currentStep" - 1) AS g(s)
+WHERE pp."currentStep" > 1
+  AND COALESCE(pp."submittedBy", pp."financeCheckedBy", pp."approvedBy") IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM approval_records r WHERE r."periodId" = pp.id)
+ON CONFLICT (id) DO NOTHING;
+
+-- ---------------------------------------------------------------------------
+-- In-app notifications (the bell): approvals waiting, returns, payments,
+-- new tasks, seat/project assignments.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS notifications (
+  id          text PRIMARY KEY,
+  "userId"    text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  type        text NOT NULL,
+  title       text NOT NULL,
+  body        text,
+  link        text,
+  "readAt"    timestamptz,
+  "createdAt" timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS notifications_user_idx ON notifications ("userId", "createdAt" DESC);

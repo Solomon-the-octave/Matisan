@@ -4,6 +4,7 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import { canAccessProject } from './projects.js';
 import { APPROVAL_STEPS } from '../approvalSteps.js';
 import { recordWeeklyHandIn, adminReopen } from './approvals.js';
+import { computePayroll } from './workerAttendance.js';
 
 const router = Router();
 
@@ -38,7 +39,25 @@ router.get('/', requireAuth, async (req, res) => {
   const { projectId, status } = req.query;
   if (projectId) periods = periods.filter((pp) => pp.projectId === projectId);
   if (status) periods = periods.filter((pp) => pp.status === status);
-  res.json({ periods, steps: APPROVAL_STEPS });
+  // Money details for people who handle payroll; field employees only see state.
+  const hoSeat = await row('SELECT 1 AS x FROM head_office_position_assignments WHERE "userId" = $1', [req.user.id]);
+  const showMoney = req.user.role !== 'employee' || !!hoSeat;
+  const pays = await rows('SELECT "periodId", "amountPaid", "paidDate" FROM payroll_payments');
+  const payBy = Object.fromEntries(pays.map((p) => [p.periodId, p]));
+  const names = Object.fromEntries((await rows('SELECT id, name FROM projects')).map((p) => [p.id, p.name]));
+  const out = [];
+  for (const pp of periods) {
+    const item = { ...pp, projectName: names[pp.projectId] || null };
+    if (showMoney) {
+      const c = await computePayroll({ isGlobalAdmin: true, role: 'admin' }, { projectId: pp.projectId, from: String(pp.weekStart).slice(0, 10), to: String(pp.weekEnd).slice(0, 10) });
+      item.payrollTotal = c.totals?.cost || 0;
+      const pay = payBy[pp.id];
+      item.amountPaid = pay ? Number(pay.amountPaid) : null;
+      item.paidDate = pay ? pay.paidDate : null;
+    }
+    out.push(item);
+  }
+  res.json({ periods: out, steps: APPROVAL_STEPS });
 });
 
 // Returns whether a given project/date falls inside an approved (locked)

@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { rows, row } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { weekRange } from './attendanceSubmissions.js';
+import { computePayroll } from './workerAttendance.js';
+import { APPROVAL_STEPS, LAST_STEP } from '../approvalSteps.js';
 
 // Read-only context for the single adaptive /dashboard: who is signed in,
 // which seats (positions) they hold on which projects, and today's site
@@ -85,6 +87,36 @@ router.get('/', requireAuth, async (req, res) => {
   for (const p of byProject.values()) projects.push(await siteSummary(p));
 
   res.json({ role: req.user.role, seats, headOffice, projects });
+});
+
+// Company-wide picture for management: admin and anyone holding a Head
+// Office seat (GM, Deputy GM, Core Department Manager, Finance...).
+router.get('/management', requireAuth, async (req, res) => {
+  const hoSeat = await row('SELECT 1 AS x FROM head_office_position_assignments WHERE "userId" = $1', [req.user.id]);
+  if (!(req.user.isGlobalAdmin || req.user.role === 'finance' || hoSeat)) {
+    return res.json({ visible: false }); // not an error: most people simply have no company overview
+  }
+  const today = todayStr();
+  const activeProjects = (await row("SELECT count(*)::int AS n FROM projects WHERE status = 'active'")).n;
+  const totalEmployees = (await row('SELECT count(*)::int AS n FROM users')).n;
+  const workersOnSite = (await row('SELECT count(DISTINCT "workerId")::int AS n FROM worker_attendance WHERE date = $1 AND (am OR pm)', [today])).n;
+  const open = await rows(
+    `SELECT pp.id, pp."requestNo", pp."weekStart", pp."weekEnd", pp."currentStep", pp.status, p.name AS "projectName", pp."projectId"
+     FROM payroll_periods pp JOIN projects p ON p.id = pp."projectId"
+     WHERE pp.status <> 'paid' ORDER BY pp."weekStart" DESC, pp."requestNo" DESC LIMIT 50`
+  );
+  const requests = [];
+  let awaitingAmount = 0;
+  let awaitingCount = 0;
+  for (const pp of open) {
+    const c = await computePayroll({ isGlobalAdmin: true, role: 'admin' }, { projectId: pp.projectId, from: String(pp.weekStart).slice(0, 10), to: String(pp.weekEnd).slice(0, 10) });
+    const amount = c.totals?.cost || 0;
+    const def = APPROVAL_STEPS[pp.currentStep - 1];
+    if (pp.currentStep === LAST_STEP) { awaitingAmount += amount; awaitingCount += 1; }
+    requests.push({ id: pp.id, requestNo: pp.requestNo, projectName: pp.projectName, weekStart: pp.weekStart, weekEnd: pp.weekEnd, step: pp.currentStep, awaiting: def ? def.name : null, amount });
+  }
+  const paidTotal = Number((await row('SELECT COALESCE(sum("amountPaid"),0) AS t FROM payroll_payments')).t);
+  res.json({ visible: true, activeProjects, totalEmployees, workersOnSite, pendingApprovals: open.length, awaitingPaymentCount: awaitingCount, awaitingPaymentAmount: awaitingAmount, paidTotal, requests: requests.slice(0, 12) });
 });
 
 export default router;

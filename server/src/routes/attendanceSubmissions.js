@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { rows, row, query, generateId } from '../db.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { canAccessProject } from './projects.js';
-import { recordWeeklyHandIn, returnWeekToField } from './approvals.js';
+import { recordWeeklyHandIn, returnWeekToField, acknowledgeWeekAsForeman } from './approvals.js';
 
 const router = Router();
 
@@ -40,7 +40,13 @@ async function loadProject(id) {
 async function visibleSubmissions(user) {
   if (user.isGlobalAdmin || user.role === 'finance') return rows(`${SELECT} ORDER BY s."submittedAt" DESC`);
   if (user.role === 'supervisor') {
-    return rows(`${SELECT} WHERE s.department = $1 ORDER BY s."submittedAt" DESC`, [user.department]);
+    // Own department, plus any project where this person holds a site seat.
+    return rows(
+      `${SELECT} WHERE s.department = $1
+         OR s."projectId" IN (SELECT "projectId" FROM project_position_assignments WHERE "userId" = $2)
+       ORDER BY s."submittedAt" DESC`,
+      [user.department, user.id]
+    );
   }
   return rows(
     `${SELECT} WHERE s."projectId" IN (SELECT "projectId" FROM project_assignments WHERE "userId" = $1)
@@ -120,7 +126,10 @@ router.post('/', requireAuth, async (req, res) => {
 async function review(req, res, status) {
   const sub = await row('SELECT * FROM attendance_submissions WHERE id = $1', [req.params.id]);
   if (!sub) return res.status(404).json({ error: 'Submission not found' });
-  if (!req.user.isGlobalAdmin && sub.department !== req.user.department) {
+  const seated = !req.user.isGlobalAdmin && sub.department !== req.user.department
+    ? await row('SELECT 1 AS x FROM project_position_assignments WHERE "projectId" = $1 AND "userId" = $2', [sub.projectId, req.user.id])
+    : null;
+  if (!req.user.isGlobalAdmin && sub.department !== req.user.department && !seated) {
     return res.status(403).json({ error: 'Outside your department access point' });
   }
   if (sub.status !== 'submitted') {
@@ -133,6 +142,10 @@ async function review(req, res, status) {
   if (status === 'returned' && sub.type === 'weekly') {
     const back = await returnWeekToField(sub.projectId, sub.periodStart, sub.periodEnd, req.user.id, reviewNote);
     if (!back.ok) return res.status(409).json({ error: back.error });
+  }
+  if (status === 'acknowledged' && sub.type === 'weekly') {
+    const ok = await acknowledgeWeekAsForeman(sub.projectId, sub.periodStart, sub.periodEnd, req.user);
+    if (!ok.ok) return res.status(409).json({ error: ok.error });
   }
   await query(
     `UPDATE attendance_submissions SET status = $1, "reviewedBy" = $2, "reviewedAt" = now(), "reviewNote" = $3 WHERE id = $4`,

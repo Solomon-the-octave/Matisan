@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { notify } from '../notify.js';
 import { rows, row, query, generateId } from '../db.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 import { canAccessProject } from './projects.js';
@@ -37,6 +38,7 @@ router.put('/head-office/:positionId', requireAuth, requireRole('admin'), async 
        ON CONFLICT ("positionId") DO UPDATE SET "userId" = EXCLUDED."userId"`,
       [generateId('hop'), position.id, userId]
     );
+    await notify([userId], { type: 'assignment', title: `You are now ${position.name} (Head Office)`, body: 'You will be asked to act on payroll requests at your step.', link: '/dashboard' });
   }
   const assignments = await rows(
     `SELECT a."positionId", a."userId", u.name AS "userName", u.title AS "userTitle"
@@ -115,6 +117,7 @@ router.put('/projects/:projectId/:positionId', requireAuth, requireRole('admin')
     if (u.role === 'employee') {
       await query('INSERT INTO project_assignments ("projectId", "userId") VALUES ($1,$2) ON CONFLICT DO NOTHING', [project.id, userId]);
     }
+    await notify([userId], { type: 'assignment', title: `You are now ${position.name} on ${project.name}`, body: 'Open your dashboard to see your project.', link: '/dashboard' });
   }
   res.json({ team: await projectTeam(await loadProject(project.id)) });
 });

@@ -2,9 +2,11 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Building2, Users, FolderKanban, ListChecks,
   CalendarCheck, FileBarChart, UserCircle, LogOut, Bell, Menu, X, HardHat, ClipboardCheck,
-  Sun, Moon, Network,
+  Sun, Moon, Network, ShieldCheck,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import api from '../api'
+import NotificationBell from './NotificationBell'
 import Logo from './Logo'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
@@ -18,6 +20,7 @@ const NAV = {
     { to: '/tasks', label: 'Tasks', icon: ListChecks },
     { to: '/attendance', label: 'Attendance', icon: CalendarCheck },
     { to: '/field-attendance', label: 'Field Attendance', icon: HardHat },
+    { to: '/approvals', label: 'Approvals', icon: ShieldCheck },
     { to: '/payroll-review', label: 'Payroll Review', icon: ClipboardCheck },
     { to: '/reports', label: 'Reports', icon: FileBarChart },
     { to: '/organization', label: 'Head Office', icon: Network },
@@ -28,6 +31,7 @@ const NAV = {
     { to: '/tasks', label: 'Tasks', icon: ListChecks },
     { to: '/attendance', label: 'Attendance', icon: CalendarCheck },
     { to: '/field-attendance', label: 'Field Attendance', icon: HardHat },
+    { to: '/approvals', label: 'Approvals', icon: ShieldCheck },
     { to: '/payroll-review', label: 'Payroll Review', icon: ClipboardCheck },
     { to: '/users', label: 'My Team', icon: Users },
     { to: '/reports', label: 'Reports', icon: FileBarChart },
@@ -43,7 +47,9 @@ const NAV = {
   ],
   finance: [
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { to: '/approvals', label: 'Approvals', icon: ShieldCheck },
     { to: '/payroll-review', label: 'Payroll Review', icon: ClipboardCheck },
+    { to: '/reports', label: 'Reports', icon: FileBarChart },
     { to: '/organization', label: 'Head Office', icon: Network },
     { to: '/profile', label: 'Profile', icon: UserCircle },
   ],
@@ -56,7 +62,16 @@ export default function Layout({ children, title, subtitle }) {
   const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
-  const items = NAV[user?.role] || NAV.employee
+  // An employee who holds a seat (Time Keeper, Foreman...) also gets Approvals.
+  const [hasSeat, setHasSeat] = useState(false)
+  useEffect(() => {
+    if (user?.role !== 'employee') return
+    api.get('/dashboard-context').then((r) => setHasSeat(r.data.seats.length > 0 || r.data.headOffice.length > 0)).catch(() => {})
+  }, [user?.role])
+  const base = NAV[user?.role] || NAV.employee
+  const items = user?.role === 'employee' && hasSeat
+    ? [...base.slice(0, 2), { to: '/approvals', label: 'Approvals', icon: ShieldCheck }, ...base.slice(2)]
+    : base
 
   function handleLogout() {
     logout()
@@ -165,9 +180,7 @@ export default function Layout({ children, title, subtitle }) {
             <span className="hidden rounded-full bg-slate-50 dark:bg-slate-800 px-3 py-1 text-[11px] font-semibold text-slate-500 ring-1 ring-inset ring-slate-200 dark:ring-slate-700 sm:inline-block">
               {ROLE_LABEL[user?.role] || user?.role}
             </span>
-            <button className="rounded-full p-2 text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-600 dark:hover:text-slate-300">
-              <Bell size={18} />
-            </button>
+            <NotificationBell />
           </div>
         </header>
         <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}</main>

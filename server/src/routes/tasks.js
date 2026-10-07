@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import multer from 'multer';
+import { notify } from '../notify.js';
 import { rows, row, query, generateId } from '../db.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
 
@@ -68,6 +69,7 @@ router.post('/', requireAuth, requireRole('admin', 'supervisor'), async (req, re
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'created',$9)`,
     [id, title, description || '', projectId || null, department, assignedTo, req.user.id, priority || 'medium', dueDate || null]
   );
+  await notify(assignedTo === req.user.id ? [] : [assignedTo], { type: 'task', title: `New task: ${String(title).slice(0, 80)}`, body: dueDate ? `Due ${dueDate}` : null, link: '/tasks' });
   res.status(201).json({ task: await row(`${TASK_SELECT} WHERE t.id = $1`, [id]) });
 });
 
@@ -92,6 +94,7 @@ router.put('/:id', requireAuth, async (req, res) => {
       const targetErr = await validateTaskTargets({ department: task.department, assignedTo, projectId: task.projectId });
       if (targetErr) return res.status(400).json({ error: targetErr });
       await query('UPDATE tasks SET "assignedTo" = $1 WHERE id = $2', [assignedTo, task.id]);
+      if (assignedTo !== req.user.id) await notify([assignedTo], { type: 'task', title: `New task: ${String(task.title).slice(0, 80)}`, body: task.dueDate ? `Due ${task.dueDate}` : null, link: '/tasks' });
     }
     await query(
       `UPDATE tasks SET

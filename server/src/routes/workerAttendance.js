@@ -172,7 +172,7 @@ router.put('/:id', requireAuth, async (req, res) => {
 
 // Shared by the on-screen "/payroll" view and the "/export" CSV download so
 // the two can never drift apart — same numbers, same rules, two formats.
-async function computePayroll(user, { projectId, from, to } = {}) {
+export async function computePayroll(user, { projectId, from, to } = {}) {
   const clauses = [];
   const args = [];
   if (!(user.isGlobalAdmin || user.role === 'finance')) {

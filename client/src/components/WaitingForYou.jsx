@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronDown, ChevronUp, ClipboardCheck } from 'lucide-react'
+import { ChevronDown, ChevronUp, ClipboardCheck, AlertTriangle } from 'lucide-react'
 import ApprovalTrail from './ApprovalTrail'
 import api from '../api'
 
@@ -10,6 +10,7 @@ export default function WaitingForYou() {
   const navigate = useNavigate()
   const [items, setItems] = useState([])
   const [open, setOpen] = useState(null)
+  const [attention, setAttention] = useState({ tasks: [], returned: [] })
 
   async function load() {
     try {
@@ -22,11 +23,40 @@ export default function WaitingForYou() {
 
   useEffect(() => {
     load()
+    api.get('/notifications/attention').then((r) => setAttention(r.data)).catch(() => {})
   }, [])
 
-  if (items.length === 0) return null
+  const extra = attention.tasks.length + attention.returned.length
+  if (items.length === 0 && extra === 0) return null
 
   return (
+    <>
+    {extra > 0 && (
+      <div className="mb-4 surface border-amber-200 dark:border-amber-500/30 p-4 shadow-sm">
+        <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200">
+          <AlertTriangle size={16} className="text-amber-500" /> Needs your attention ({extra})
+        </h3>
+        <ul className="space-y-1.5 text-sm">
+          {attention.returned.map((r) => (
+            <li key={r.id} className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-slate-600 dark:text-slate-300">
+                {r.projectName}: {r.type === 'weekly' ? 'week' : 'day'} {r.periodStart} sent back{r.reviewNote ? ` — ${r.reviewNote}` : ''}
+              </span>
+              <button onClick={() => navigate('/field-attendance')} className="text-xs font-semibold text-brand-600 dark:text-brand-300">Fix it</button>
+            </li>
+          ))}
+          {attention.tasks.map((t) => (
+            <li key={t.id} className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-slate-600 dark:text-slate-300">
+                Task "{t.title}" {t.overdue ? <b className="text-rose-600 dark:text-rose-400">overdue</b> : 'due soon'} ({t.dueDate})
+              </span>
+              <button onClick={() => navigate('/tasks')} className="text-xs font-semibold text-brand-600 dark:text-brand-300">Open</button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
+    {items.length > 0 && (
     <div className="mb-6 surface border-brand-200 dark:border-brand-500/30 p-4 shadow-sm">
       <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-slate-700 dark:text-slate-200">
         <ClipboardCheck size={16} className="text-brand-600 dark:text-brand-400" /> Waiting for your action ({items.length})
@@ -64,5 +94,7 @@ export default function WaitingForYou() {
         ))}
       </div>
     </div>
+    )}
+    </>
   )
 }
