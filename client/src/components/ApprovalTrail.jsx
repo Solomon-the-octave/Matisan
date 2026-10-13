@@ -13,6 +13,7 @@ const STYLE = {
 }
 
 const money = (n) => Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 })
+const fmtDateTime = (d) => new Date(d).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 const fmtDate = (d) => new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 
 export default function ApprovalTrail({ periodId, onChange }) {
@@ -21,7 +22,7 @@ export default function ApprovalTrail({ periodId, onChange }) {
   const [returning, setReturning] = useState(false)
   const [reason, setReason] = useState('')
   const [error, setError] = useState('')
-  const [showHistory, setShowHistory] = useState(false)
+  const [showHistory, setShowHistory] = useState(true)
   const [payForm, setPayForm] = useState({ amountPaid: '', paidDate: new Date().toISOString().slice(0, 10), reference: '', method: '', proof: null })
 
   async function load() {
@@ -226,19 +227,39 @@ export default function ApprovalTrail({ periodId, onChange }) {
       {error && !canAct && <p className="mt-2 text-xs font-medium text-rose-600 dark:text-rose-400">{error}</p>}
 
       {history.length > 0 && (
-        <div className="mt-3">
-          <button onClick={() => setShowHistory((v) => !v)} className="text-[11px] font-semibold text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
-            {showHistory ? 'Hide history' : `History (${history.length})`}
+        <div className="mt-3 border-t border-slate-100 dark:border-slate-800 pt-3">
+          <button onClick={() => setShowHistory((v) => !v)} className="text-xs font-bold text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 no-print">
+            {showHistory ? 'Hide full trail' : `Show full trail (${history.length})`}
           </button>
-          {showHistory && (
-            <ul className="mt-1 space-y-0.5 text-[11px] text-slate-400">
-              {history.map((h, i) => (
-                <li key={i}>
-                  {fmtDate(h.actionDate)} · {h.userName} {h.action === 'completed' ? 'approved' : 'returned'} {h.label || ''}{h.comment ? ` — ${h.comment}` : ''}
+          <div className="print-only text-xs font-bold text-slate-500">Full trail</div>
+          <ol className={`${showHistory ? '' : 'hidden print:block'} mt-2 space-y-2.5 border-l-2 border-slate-200 dark:border-slate-700 pl-3`}>
+            {history.map((h, i) => {
+              const prev = history.slice(0, i).reverse().find((x) => x.snapshot)
+              const changed = h.snapshot && prev && Math.abs((h.snapshot.cost || 0) - (prev.snapshot.cost || 0)) > 0.005
+              return (
+                <li key={i} className="text-xs">
+                  <div className="font-semibold text-slate-700 dark:text-slate-200">
+                    Step {h.step}, {h.label || h.stepName}: {h.action === 'completed' ? 'Done' : `Returned to step ${h.toStep || h.step - 1}`}
+                  </div>
+                  <div className="text-slate-500">
+                    {h.userName}{h.actorPosition ? `, ${h.actorPosition}` : ''}
+                    <span className="text-slate-400"> · {fmtDateTime(h.actionDate)}</span>
+                  </div>
+                  {h.snapshot && (
+                    <div className="text-slate-500">
+                      Figures at that time: {h.snapshot.workers} workers, {h.snapshot.daysPresent} days present, {h.snapshot.otHours} OT hours, total {money(h.snapshot.cost)} ETB
+                    </div>
+                  )}
+                  {changed && (
+                    <div className="font-medium text-amber-600 dark:text-amber-400">
+                      Total changed from {money(prev.snapshot.cost)} to {money(h.snapshot.cost)} ETB since the previous action
+                    </div>
+                  )}
+                  {h.comment && <div className="text-slate-600 dark:text-slate-300">Note: {h.comment}</div>}
                 </li>
-              ))}
-            </ul>
-          )}
+              )
+            })}
+          </ol>
         </div>
       )}
     </div>

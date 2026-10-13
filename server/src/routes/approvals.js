@@ -69,11 +69,50 @@ export async function ensurePeriod(projectId, weekStart, weekEnd, userId) {
   return row('SELECT * FROM payroll_periods WHERE id = $1', [id]);
 }
 
+// The figures in front of the person at the moment they act, so the trail
+// shows exactly what was checked, approved or returned.
+async function figuresSnapshot(period) {
+  try {
+    const r = await computePayroll(SYSTEM_VIEW, { projectId: period.projectId, from: String(period.weekStart).slice(0, 10), to: String(period.weekEnd).slice(0, 10) });
+    return { workers: r.totals?.workers || 0, daysPresent: r.totals?.daysPresent || 0, otHours: r.totals?.otHours || 0, cost: r.totals?.cost || 0 };
+  } catch { return null; }
+}
+
+// The seat the person acted from: their position on this project, Project
+// Manager, a Head Office seat, or Administrator.
+async function actorPositionFor(period, userId, step) {
+  const u = await row('SELECT role, "isGlobalAdmin" FROM users WHERE id = $1', [userId]);
+  const stepPos = APPROVAL_STEPS[step - 1]?.positionId;
+  if (stepPos) {
+    const held = await row(
+      `SELECT pos.name FROM positions pos WHERE pos.id = $3 AND (
+         EXISTS (SELECT 1 FROM project_position_assignments a WHERE a."userId" = $1 AND a."projectId" = $2 AND a."positionId" = pos.id)
+         OR EXISTS (SELECT 1 FROM head_office_position_assignments h WHERE h."userId" = $1 AND h."positionId" = pos.id)
+         OR (pos.id = 'site-project-manager' AND EXISTS (SELECT 1 FROM projects pr WHERE pr.id = $2 AND pr."managerId" = $1)))`,
+      [userId, period.projectId, stepPos]
+    );
+    if (held) return held.name;
+    if (u?.isGlobalAdmin || u?.role === 'admin') return 'Administrator';
+  }
+  const seat = await row(
+    `SELECT pos.name FROM project_position_assignments a JOIN positions pos ON pos.id = a."positionId"
+     WHERE a."userId" = $1 AND a."projectId" = $2 ORDER BY pos.level LIMIT 1`, [userId, period.projectId]);
+  if (seat) return seat.name;
+  if ((await row('SELECT 1 AS x FROM projects WHERE id = $1 AND "managerId" = $2', [period.projectId, userId]))) return 'Project Manager';
+  const ho = await row(
+    `SELECT pos.name FROM head_office_position_assignments h JOIN positions pos ON pos.id = h."positionId"
+     WHERE h."userId" = $1 ORDER BY pos.level LIMIT 1`, [userId]);
+  if (ho) return ho.name;
+  return u?.isGlobalAdmin || u?.role === 'admin' ? 'Administrator' : null;
+}
+
 export async function logStep(period, step, userId, action, { toStep = null, comment = null } = {}) {
+  const snapshot = await figuresSnapshot(period);
+  const actorPosition = await actorPositionFor(period, userId, step);
   await query(
-    `INSERT INTO approval_records (id, "periodId", step, "positionId", "userId", action, "toStep", comment)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-    [generateId('apr'), period.id, step, APPROVAL_STEPS[step - 1]?.positionId || null, userId, action, toStep, comment]
+    `INSERT INTO approval_records (id, "periodId", step, "positionId", "userId", action, "toStep", comment, snapshot, "actorPosition")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+    [generateId('apr'), period.id, step, APPROVAL_STEPS[step - 1]?.positionId || null, userId, action, toStep, comment, snapshot ? JSON.stringify(snapshot) : null, actorPosition]
   );
   const pointer = await syncPeriod(period.id);
   try { await notifyAfter(period, step, action, pointer, userId, comment, toStep); } catch (e) { console.error('notify failed:', e.message); }
@@ -213,6 +252,7 @@ async function buildTrail(user, period) {
     history: records.map((r) => ({
       step: r.step, label: APPROVAL_STEPS[r.step - 1]?.label, positionName: posName[r.positionId] || r.positionId,
       action: r.action, comment: r.comment, userName: r.userName, actionDate: r.actionDate,
+      toStep: r.toStep, stepName: APPROVAL_STEPS[r.step - 1]?.name, actorPosition: r.actorPosition || null, snapshot: r.snapshot || null,
     })),
     canAct,
     // Step 1 is the field's hand-in; it can't be "returned" (nobody before it)

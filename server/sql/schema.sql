@@ -357,3 +357,8 @@ CREATE INDEX IF NOT EXISTS task_events_task_idx ON task_events ("taskId", "creat
 INSERT INTO task_events ("taskId", "actorId", type, detail, "toUser", "createdAt")
 SELECT t.id, t."createdBy", 'created', 'Task created', t."assignedTo", t."createdAt"
 FROM tasks t WHERE NOT EXISTS (SELECT 1 FROM task_events e WHERE e."taskId" = t.id);
+
+-- Approval detail: what the person saw when they acted (figures at that
+-- moment) and the seat they acted from. Older records simply have none.
+ALTER TABLE approval_records ADD COLUMN IF NOT EXISTS snapshot jsonb;
+ALTER TABLE approval_records ADD COLUMN IF NOT EXISTS "actorPosition" text;
