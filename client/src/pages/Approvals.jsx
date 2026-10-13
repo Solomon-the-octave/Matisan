@@ -17,6 +17,7 @@ export default function Approvals() {
   const [steps, setSteps] = useState([])
   const [open, setOpen] = useState(params.get('period'))
   const [filter, setFilter] = useState('all')
+  const [delayed, setDelayed] = useState(null)
 
   async function load() {
     const [w, p] = await Promise.all([api.get('/approvals/waiting'), api.get('/payroll-periods')])
@@ -27,6 +28,7 @@ export default function Approvals() {
 
   useEffect(() => {
     load().catch(() => setWaiting([]))
+    api.get('/delays').then((r) => setDelayed(r.data)).catch(() => {})
   }, [])
 
   const waitingIds = new Set((waiting || []).filter((w) => !w.handIn).map((w) => w.periodId))
@@ -53,6 +55,26 @@ export default function Approvals() {
                   <div className="text-xs text-slate-400">Week {fmt(w.weekStart)} – {fmt(w.weekEnd)} · {w.handIn ? 'Sent back to the field' : `${w.label} (${w.positionName})`}</div>
                 </div>
                 {!w.handIn && <button onClick={() => setOpen(w.periodId)} className="shrink-0 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-700">Review</button>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {delayed?.visible && delayed.items.length > 0 && (
+        <div className="mb-6 surface border-amber-300 dark:border-amber-500/40 p-4">
+          <h3 className="mb-2 text-sm font-bold text-amber-700 dark:text-amber-300">Delayed ({delayed.items.length}): waiting more than {delayed.days} days at one step</h3>
+          <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+            {delayed.items.map((d) => (
+              <li key={d.periodId} className="flex items-center justify-between gap-3 py-2">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold text-slate-700 dark:text-slate-200">{d.requestNo ? `${d.requestNo} · ` : ''}{d.projectName}</div>
+                  <div className="text-xs text-slate-400">
+                    Week {fmt(d.weekStart)} – {fmt(d.weekEnd)} · waiting {d.daysWaiting} days for {d.stepName}
+                    {d.unassigned ? ' (no one holds this position)' : ` (${d.holders.join(', ')})`}
+                  </div>
+                </div>
+                <button onClick={() => setOpen(d.periodId)} className="shrink-0 rounded-lg border border-slate-200 dark:border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">Open</button>
               </li>
             ))}
           </ul>

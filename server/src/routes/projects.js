@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { audit, changes, describe } from '../audit.js';
 import multer from 'multer';
 import { rows, row, query, generateId } from '../db.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
@@ -88,6 +89,7 @@ router.post('/', requireAuth, requireRole('admin', 'supervisor'), async (req, re
     [id, name, site || '', department, manager, start, endDate || null, priority || 'medium', description || '',
      projectNumber || null, client || null, contractor || null, consultant || null]
   );
+  await audit(req.user, 'project.create', 'project', id, `Created project ${name}`);
   res.status(201).json({ project: await getProject(id) });
 });
 
@@ -127,7 +129,10 @@ router.put('/:id', requireAuth, requireRole('admin', 'supervisor'), async (req, 
      endDate || null, priority ?? null, managerId || null,
      projectNumber ?? null, client ?? null, contractor ?? null, consultant ?? null, startDate || null, project.id]
   );
-  res.json({ project: await getProject(project.id) });
+  const after = await getProject(project.id);
+  const diff = changes(project, after, ['name', 'status', 'progress', 'site', 'startDate', 'endDate', 'priority', 'managerId', 'projectNumber', 'client', 'contractor', 'consultant']);
+  if (diff.length) await audit(req.user, 'project.update', 'project', project.id, `Updated project ${project.name}: ${describe(diff)}`, { changes: diff });
+  res.json({ project: after });
 });
 
 // Delete a project (admin only). Projects that already have field records
@@ -150,6 +155,7 @@ router.delete('/:id', requireAuth, requireRole('admin'), async (req, res) => {
   }
   await query('DELETE FROM tasks WHERE "projectId" = $1', [project.id]);
   await query('DELETE FROM projects WHERE id = $1', [project.id]);
+  await audit(req.user, 'project.delete', 'project', project.id, `Deleted project ${project.name}`);
   res.json({ ok: true });
 });
 
@@ -179,6 +185,7 @@ router.put('/:id/assignments', requireAuth, requireRole('admin', 'supervisor'), 
   } else {
     await query('DELETE FROM project_assignments WHERE "projectId" = $1 AND "userId" = $2', [project.id, userId]);
   }
+  await audit(req.user, `project.team_${action}`, 'project', project.id, `${action === 'add' ? 'Added' : 'Removed'} ${employee.name} ${action === 'add' ? 'to' : 'from'} the ${project.name} team`);
   res.json({ project: await getProject(project.id) });
 });
 

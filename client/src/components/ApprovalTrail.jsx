@@ -219,6 +219,7 @@ export default function ApprovalTrail({ periodId, onChange }) {
           <div className="font-semibold">Paid {money(payment.amountPaid)} ETB on {fmtDate(payment.paidDate)} by {payment.paidByName}</div>
           {(payment.method || payment.reference) && <div>{[payment.method, payment.reference].filter(Boolean).join(' · ')}</div>}
           {payment.differsFromTotal && <div className="font-medium">Differs from the calculated total of {money(payrollTotal)} ETB.</div>}
+          <a href={`/voucher/${periodId}`} target="_blank" rel="noreferrer" className="no-print mt-1 inline-flex items-center gap-1 font-semibold underline"><Printer size={12} /> Payment voucher</a>
           {payment.hasProof && (
             <button onClick={downloadProof} className="mt-1 inline-flex items-center gap-1 font-semibold underline"><Paperclip size={12} /> {payment.proofName}</button>
           )}

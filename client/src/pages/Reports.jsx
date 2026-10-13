@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Printer, Download, FolderKanban, CheckCircle2, ClipboardList, CalendarCheck, FileSpreadsheet } from 'lucide-react'
+import ProjectExport from '../components/ProjectExport'
 import Layout from '../components/Layout'
 import StatCard from '../components/StatCard'
 import api from '../api'
@@ -203,6 +204,7 @@ export default function Reports() {
         </div>
       </div>
       <HrReports />
+      <ProjectExport />
     </Layout>
   )
 }

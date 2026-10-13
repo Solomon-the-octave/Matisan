@@ -4,6 +4,8 @@ import Badge from '../components/Badge'
 import Layout from '../components/Layout'
 import ScrollHint from '../components/ScrollHint'
 import api from '../api'
+import OfflineBanner from '../components/OfflineBanner'
+import { enqueue, isNetworkError, useOfflineState } from '../offline'
 import { useAuth } from '../context/AuthContext'
 
 // Downloads a CSV from the worker-attendance export endpoint — same numbers
@@ -127,6 +129,12 @@ export default function FieldAttendance() {
   const [subNote, setSubNote] = useState('')
 
   const today = new Date().toISOString().slice(0, 10)
+  const [syncNotice, setSyncNotice] = useState('')
+  const offline = useOfflineState((r) => {
+    setSyncNotice(r.applied > 0 ? `${r.applied} ${r.applied === 1 ? 'change' : 'changes'} uploaded.` : '')
+    setTimeout(() => setSyncNotice(''), 6000)
+    loadRoster(projectId); loadWeekGrid(projectId); loadPayroll(projectId)
+  })
   const { weekStart, weekEnd } = useMemo(() => currentWeekRange(), [])
   const weekDates = useMemo(() => {
     const dates = []
@@ -214,6 +222,13 @@ export default function FieldAttendance() {
       ...prev,
       [workerId]: { ...prev[workerId], [date]: { ...(existing || freshBase), ...patch } },
     })) // optimistic
+    // No signal (or this cell is itself still waiting to upload): keep it on the phone.
+    const keepOnPhone = () => {
+      const state = { ...(existing || freshBase), ...patch }
+      enqueue({ workerId, projectId, date, am: !!state.am, pm: !!state.pm, otHours: Number(state.otHours) || 0, lateHours: Number(state.lateHours) || 0, workerName: workersById[workerId]?.name || gridWorkers.find((w) => w.id === workerId)?.name })
+      setGridData((prev) => ({ ...prev, [workerId]: { ...prev[workerId], [date]: { ...state, id: existing?.id || `local-${workerId}-${date}`, workerId, date } } }))
+    }
+    if (!navigator.onLine || String(existing?.id || '').startsWith('local-')) return keepOnPhone()
     const run = existing
       ? api.put(`/worker-attendance/${existing.id}`, patch)
       : api.post('/worker-attendance', { workerId, projectId, date, ...freshBase, ...patch })
@@ -223,6 +238,7 @@ export default function FieldAttendance() {
         loadPayroll(projectId)
       })
       .catch((e) => {
+        if (isNetworkError(e)) return keepOnPhone()
         setError(e.response?.data?.error || 'Could not update attendance')
         loadWeekGrid(projectId) // roll back
       })
@@ -297,8 +313,14 @@ export default function FieldAttendance() {
       return
     }
     const t = setTimeout(async () => {
-      const res = await api.get('/workers', { params: { q: query } })
-      setSearchResults(res.data.workers)
+      try {
+        const res = await api.get('/workers', { params: { q: query } })
+        setSearchResults(res.data.workers)
+      } catch {
+        // No signal: search the workers this phone already loaded.
+        const q = query.trim().toLowerCase()
+        setSearchResults(Object.values(workersById).concat(gridWorkers).filter((w, i, a) => a.findIndex((x) => x.id === w.id) === i && (w.name?.toLowerCase().includes(q) || w.id?.toLowerCase().includes(q))))
+      }
     }, 250)
     return () => clearTimeout(t)
   }, [query])
@@ -334,10 +356,18 @@ export default function FieldAttendance() {
 
   async function updateAttendance(recordId, patch) {
     setRoster((prev) => prev.map((r) => (r.id === recordId ? { ...r, ...patch } : r))) // optimistic
+    const rec = roster.find((r) => r.id === recordId)
+    const keepOnPhone = () => {
+      if (!rec) return
+      const state = { ...rec, ...patch }
+      enqueue({ workerId: rec.workerId, projectId: rec.projectId || projectId, date: String(rec.date).slice(0, 10), am: !!state.am, pm: !!state.pm, otHours: Number(state.otHours) || 0, lateHours: Number(state.lateHours) || 0, workerName: workersById[rec.workerId]?.name })
+    }
+    if (!navigator.onLine || String(recordId).startsWith('local-')) return keepOnPhone()
     try {
       await api.put(`/worker-attendance/${recordId}`, patch)
       loadPayroll(projectId)
     } catch (e) {
+      if (isNetworkError(e)) return keepOnPhone()
       setError(e.response?.data?.error || 'Could not update attendance')
       loadRoster(projectId) // roll back the optimistic change
     }
@@ -346,12 +376,23 @@ export default function FieldAttendance() {
   async function registerExisting(workerId) {
     setBusy(true)
     setError('')
+    const keepOnPhone = () => {
+      const w = workersById[workerId] || searchResults.find((x) => x.id === workerId)
+      enqueue({ workerId, projectId, date: today, am: true, pm: true, otHours: Number(regOt) || 0, workerName: w?.name })
+      if (w) setWorkersById((m) => ({ ...m, [workerId]: w }))
+      setRoster((prev) => (prev.some((r) => r.workerId === workerId) ? prev : [...prev, { id: `local-${workerId}-${today}`, workerId, projectId, date: today, am: true, pm: true, otHours: Number(regOt) || 0, lateHours: 0 }]))
+      setToast(`${w?.name || workerId} marked present. Saved on this phone, it uploads when the signal returns.`)
+      setShowModal(false)
+      setBusy(false)
+    }
+    if (!navigator.onLine) return keepOnPhone()
     try {
       const res = await api.post('/worker-attendance', { workerId, projectId, otHours: regOt || 0 })
       setToast(res.data.alreadyRegistered ? `${workerId} was already marked present today` : `${workerId} marked present`)
       setShowModal(false)
       loadRoster(projectId)
     } catch (e) {
+      if (isNetworkError(e)) return keepOnPhone()
       setError(e.response?.data?.error || 'Could not register attendance')
     } finally {
       setBusy(false)
@@ -367,6 +408,7 @@ export default function FieldAttendance() {
 
   async function submitNewWorker(e) {
     e.preventDefault()
+    if (!navigator.onLine) return setError('Registering a new worker needs signal. You can still mark workers who are already registered.')
     setBusy(true)
     setError('')
     try {
@@ -388,7 +430,7 @@ export default function FieldAttendance() {
       loadRoster(projectId)
       loadPayroll(projectId)
     } catch (e) {
-      setError(e.response?.data?.error || 'Could not register worker')
+      setError(isNetworkError(e) ? 'No signal. Registering a new worker needs signal.' : e.response?.data?.error || 'Could not register worker')
     } finally {
       setBusy(false)
     }
@@ -446,6 +488,7 @@ export default function FieldAttendance() {
 
   return (
     <Layout title="Field Attendance" subtitle="Register site workers and track who's on the ground today">
+      <OfflineBanner state={offline} notice={syncNotice} />
       {toast && (
         <div className="mb-4 rounded-lg bg-brand-50 dark:bg-brand-500/15 px-4 py-2.5 text-sm font-semibold text-brand-700 dark:text-brand-300 ring-1 ring-inset ring-brand-100 dark:ring-brand-500/25">
           {toast}

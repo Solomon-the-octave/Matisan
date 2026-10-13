@@ -25,6 +25,9 @@ import dashboardContextRoutes from './routes/dashboardContext.js';
 import notificationRoutes from './routes/notifications.js';
 import financeRoutes from './routes/finance.js';
 import hrReportRoutes from './routes/hrReports.js';
+import auditRoutes from './routes/auditLog.js';
+import projectExportRoutes from './routes/projectExport.js';
+import delayRoutes, { sendDelayReminders } from './routes/delays.js';
 
 dotenv.config();
 
@@ -61,6 +64,9 @@ app.use('/api/approvals', approvalRoutes);
 app.use('/api/dashboard-context', dashboardContextRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/hr-reports', hrReportRoutes);
+app.use('/api/delays', delayRoutes);
+app.use('/api/audit', auditRoutes);
+app.use('/api/project-export', projectExportRoutes);
 app.use('/api/finance', financeRoutes);
 
 // In production this one process serves both the API and the built React
@@ -91,6 +97,10 @@ assertDbConnection()
   .then(() => {
     app.listen(PORT, () => {
       console.log(`Matisan HR API running on http://localhost:${PORT}`);
+      // Nudge the people holding stuck approvals; checked hourly.
+      const sweep = () => sendDelayReminders().catch((e) => console.error('delay reminders failed:', e.message));
+      setTimeout(sweep, 30000).unref();
+      setInterval(sweep, 60 * 60 * 1000).unref();
     });
   })
   .catch((err) => {

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { audit, changes, describe } from '../audit.js';
 import { notify } from '../notify.js';
 import { rows, row, query, generateId } from '../db.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
@@ -54,6 +55,8 @@ router.put('/head-office/:positionId', requireAuth, requireRole('admin'), async 
   const position = await row("SELECT * FROM positions WHERE id = $1 AND type = 'head_office'", [req.params.positionId]);
   if (!position) return res.status(404).json({ error: 'Position not found' });
   const { userId } = req.body; // null/empty clears the seat
+  const prevHolder = (await row('SELECT u.name FROM head_office_position_assignments a JOIN users u ON u.id = a."userId" WHERE a."positionId" = $1', [position.id]))?.name || 'nobody';
+  const newHolder = userId ? (await row('SELECT name FROM users WHERE id = $1', [userId]))?.name : null;
   if (!userId) {
     await query('DELETE FROM head_office_position_assignments WHERE "positionId" = $1', [position.id]);
   } else {
@@ -66,6 +69,7 @@ router.put('/head-office/:positionId', requireAuth, requireRole('admin'), async 
     );
     await notify([userId], { type: 'assignment', title: `You are now ${position.name} (Head Office)`, body: 'You will be asked to act on payroll requests at your step.', link: '/dashboard' });
   }
+  await audit(req.user, 'position.head_office', 'position', position.id, `${position.name} (Head Office): ${prevHolder} to ${newHolder || 'nobody'}`, { positionId: position.id, userId: userId || null });
   const assignments = await rows(
     `SELECT a."positionId", a."userId", u.name AS "userName", u.title AS "userTitle"
      FROM head_office_position_assignments a JOIN users u ON u.id = a."userId"`
@@ -119,6 +123,9 @@ router.put('/projects/:projectId/:positionId', requireAuth, requireRole('admin')
   const position = await row("SELECT * FROM positions WHERE id = $1 AND type = 'site'", [req.params.positionId]);
   if (!position) return res.status(404).json({ error: 'Position not found' });
   const { userId } = req.body;
+  const prevId = position.id === PM ? project.managerId : (await row('SELECT "userId" FROM project_position_assignments WHERE "projectId" = $1 AND "positionId" = $2', [project.id, position.id]))?.userId;
+  const nameOf = async (id) => (id ? (await row('SELECT name FROM users WHERE id = $1', [id]))?.name : null) || 'nobody';
+  const prevName = await nameOf(prevId);
 
   if (position.id === PM) {
     if (userId) {
@@ -145,6 +152,7 @@ router.put('/projects/:projectId/:positionId', requireAuth, requireRole('admin')
     }
     await notify([userId], { type: 'assignment', title: `You are now ${position.name} on ${project.name}`, body: 'Open your dashboard to see your project.', link: '/dashboard' });
   }
+  await audit(req.user, 'position.project', 'project', project.id, `${position.name} on ${project.name}: ${prevName} to ${await nameOf(userId)}`, { positionId: position.id, userId: userId || null });
   res.json({ team: await projectTeam(await loadProject(project.id)) });
 });
 

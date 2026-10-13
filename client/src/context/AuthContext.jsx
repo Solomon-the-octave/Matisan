@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import api from '../api'
+import { isNetworkError } from '../offline'
 import { getToken, getStoredUser, saveSession, saveUser, clearSession, purgeLegacySession } from '../authStorage'
 
 const AuthContext = createContext(null)
@@ -22,7 +23,10 @@ export function AuthProvider({ children }) {
         setUser(res.data.user)
         saveUser(res.data.user)
       })
-      .catch(() => {
+      .catch((err) => {
+        // No signal is not a sign-out: keep this tab's saved login so the
+        // field team can carry on recording attendance offline.
+        if (isNetworkError(err)) return
         clearSession()
         setUser(null)
       })

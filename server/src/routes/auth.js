@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { row, query } from '../db.js';
+import { audit } from '../audit.js';
 import { signToken, requireAuth } from '../middleware/auth.js';
 
 const router = Router();
@@ -38,6 +39,7 @@ router.post('/change-password', requireAuth, async (req, res) => {
     return res.status(401).json({ error: 'Current password is incorrect' });
   }
   await query('UPDATE users SET "passwordHash" = $1 WHERE id = $2', [bcrypt.hashSync(newPassword, 10), req.user.id]);
+  await audit(req.user, 'user.password_change', 'user', req.user.id, 'Changed their own password');
   res.json({ ok: true });
 });
 

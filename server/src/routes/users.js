@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { audit, changes, describe } from '../audit.js';
 import bcrypt from 'bcryptjs';
 import { rows, row, query, generateId, withTransaction } from '../db.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
@@ -65,6 +66,7 @@ router.post('/', requireAuth, requireRole('admin', 'supervisor'), async (req, re
     [user.id, user.name, user.email, user.passwordHash, user.role, user.department, user.title, user.phone, user.isGlobalAdmin]
   );
   const created = await row('SELECT * FROM users WHERE id = $1', [user.id]);
+  await audit(req.user, 'user.create', 'user', user.id, `Created user ${user.name} (${user.role}, department ${user.department})`);
   res.status(201).json({ user: publicUser(created) });
 });
 
@@ -105,6 +107,12 @@ router.put('/:id', requireAuth, requireRole('admin', 'supervisor'), async (req, 
     [next.name, next.title, next.phone, next.role, next.department, target.id]
   );
   const updated = await row('SELECT * FROM users WHERE id = $1', [target.id]);
+  const diff = changes(target, next, ['name', 'title', 'phone', 'role', 'department']);
+  if (req.user.isGlobalAdmin && email && email.trim().toLowerCase() !== target.email.toLowerCase()) diff.push({ field: 'email', from: target.email, to: email.trim() });
+  const passwordReset = !!(req.user.isGlobalAdmin && password);
+  if (diff.length || passwordReset) {
+    await audit(req.user, 'user.update', 'user', target.id, `Updated ${target.name}: ${[describe(diff), passwordReset ? 'password reset' : ''].filter(Boolean).join('; ')}`, { changes: diff, passwordReset });
+  }
   res.json({ user: publicUser(updated) });
 });
 
@@ -130,12 +138,14 @@ router.put('/:id/deactivate', requireAuth, requireRole('admin'), async (req, res
     await c.query('UPDATE users SET "isActive" = false WHERE id = $1', [target.id]);
     return [...site, ...ho, ...managed.map((m) => ({ positionName: 'Project Manager', projectName: m.name }))];
   });
+  await audit(req.user, 'user.deactivate', 'user', target.id, `Deactivated ${target.name}${seats.length ? ` (left ${seats.map((s) => `${s.positionName} - ${s.projectName}`).join(', ')})` : ''}`, { freedSeats: seats });
   res.json({ ok: true, freedSeats: seats });
 });
 
 router.put('/:id/activate', requireAuth, requireRole('admin'), async (req, res) => {
   const r = await query('UPDATE users SET "isActive" = true WHERE id = $1', [req.params.id]);
   if (r.rowCount === 0) return res.status(404).json({ error: 'User not found' });
+  await audit(req.user, 'user.activate', 'user', req.params.id, `Reactivated user ${req.params.id}`);
   res.json({ ok: true });
 });
 
@@ -161,6 +171,7 @@ router.delete('/:id', requireAuth, requireRole('admin'), async (req, res) => {
     }
     throw e;
   }
+  await audit(req.user, 'user.delete', 'user', target.id, `Deleted user ${target.name}`);
   res.json({ ok: true });
 });
 

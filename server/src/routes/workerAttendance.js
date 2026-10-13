@@ -5,6 +5,7 @@ import { canAccessProject } from './projects.js';
 import { findLockedPeriod } from './payrollPeriods.js';
 import { findSubmissionLock } from './attendanceSubmissions.js';
 import { laborType } from '../laborStructure.js';
+import { audit } from '../audit.js';
 
 const router = Router();
 
@@ -151,6 +152,75 @@ router.post('/', requireAuth, async (req, res) => {
   if (projectId) await query('UPDATE workers SET "projectId" = $1 WHERE id = $2', [projectId, workerId]);
 
   res.status(201).json({ attendance: await row('SELECT * FROM worker_attendance WHERE id = $1', [id]) });
+});
+
+// Upload attendance that was recorded on a phone without signal. Each entry
+// says "this worker, this day, this state" and carries the time it was really
+// recorded, so a day entered on the day itself is still accepted when the
+// phone reaches signal a day or two later. Every other rule still applies
+// (assigned project, locked weeks, handed-in days). Safe to send twice.
+const OFFLINE_MAX_AGE_MS = 7 * 24 * 3600 * 1000;
+router.post('/sync', requireAuth, async (req, res) => {
+  if (req.user.role !== 'employee' && !req.user.isGlobalAdmin) {
+    return res.status(403).json({ error: 'Attendance is recorded by the field team' });
+  }
+  const entries = Array.isArray(req.body.entries) ? req.body.entries.slice(0, 500) : [];
+  const results = [];
+  const fail = (cid, error) => results.push({ cid, status: 'rejected', error });
+  for (const e of entries) {
+    const cid = e?.cid;
+    try {
+      const date = String(e.date || '').slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(date))) { fail(cid, 'Invalid date'); continue; }
+      const worker = await row('SELECT * FROM workers WHERE id = $1', [e.workerId]);
+      if (!worker) { fail(cid, 'Worker not found'); continue; }
+      if (!req.user.isGlobalAdmin && worker.department !== req.user.department) { fail(cid, 'Outside your department access point'); continue; }
+      const projectId = e.projectId || worker.projectId || null;
+      if (!projectId) { fail(cid, 'A project/site is required'); continue; }
+      const project = await row(
+        `SELECT p.*, COALESCE((SELECT array_agg(pa."userId") FROM project_assignments pa WHERE pa."projectId" = p.id), ARRAY[]::text[]) AS "assignedEmployees" FROM projects p WHERE p.id = $1`,
+        [projectId]
+      );
+      if (!project || !canAccessProject(req.user, project)) { fail(cid, "You're not assigned to that project"); continue; }
+
+      // Was it really recorded on that day (by the phone's clock), and recently?
+      const rec = new Date(e.recordedAt);
+      const recOk = !Number.isNaN(rec.getTime()) && rec.getTime() <= Date.now() + 10 * 60 * 1000 && Date.now() - rec.getTime() <= OFFLINE_MAX_AGE_MS
+        && new Set([rec.toISOString().slice(0, 10), rec.toLocaleDateString('en-CA', { timeZone: 'Africa/Addis_Ababa' })]).has(date);
+      if (!recOk) {
+        const blocked = await pastDayBlocked(req.user, projectId, date);
+        if (blocked) { fail(cid, blocked); continue; }
+      }
+      if (!req.user.isGlobalAdmin && (await findLockedPeriod(projectId, date))) { fail(cid, 'This week has passed the site checks and is locked.'); continue; }
+      if (req.user.role === 'employee' && (await findSubmissionLock(projectId, date))) { fail(cid, 'This day was already submitted to your supervisor.'); continue; }
+
+      const am = !!e.am;
+      const pm = !!e.pm;
+      const ot = Math.max(0, Number(e.otHours) || 0);
+      const late = Math.min(8, Math.max(0, Number(e.lateHours) || 0));
+      const existing = await row('SELECT * FROM worker_attendance WHERE "workerId" = $1 AND date = $2', [worker.id, date]);
+      let record;
+      if (existing) {
+        await query('UPDATE worker_attendance SET am = $1, pm = $2, "otHours" = $3, "lateHours" = $4, "offlineRecordedAt" = $5 WHERE id = $6', [am, pm, ot, late, rec, existing.id]);
+        record = await row('SELECT * FROM worker_attendance WHERE id = $1', [existing.id]);
+      } else {
+        const id = generateId('wa');
+        await query(
+          `INSERT INTO worker_attendance (id, "workerId", "projectId", department, date, am, pm, "otHours", "registeredBy", "registeredAt", "lateHours", "offlineRecordedAt")
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,now(),$10,$11)`,
+          [id, worker.id, projectId, worker.department, date, am, pm, ot, req.user.id, late, rec]
+        );
+        record = await row('SELECT * FROM worker_attendance WHERE id = $1', [id]);
+      }
+      results.push({ cid, status: 'applied', attendance: record });
+    } catch (err) {
+      console.error('offline sync entry failed:', err.message);
+      fail(cid, 'Could not save this entry');
+    }
+  }
+  const applied = results.filter((r) => r.status === 'applied').length;
+  if (entries.length) await audit(req.user, 'attendance.offline_sync', 'attendance', null, `Uploaded ${entries.length} attendance entries recorded offline (${applied} saved, ${entries.length - applied} not accepted)`);
+  res.json({ results });
 });
 
 // Adjust an existing day's record — toggle Morning/Afternoon or log OT

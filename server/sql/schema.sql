@@ -362,3 +362,31 @@ FROM tasks t WHERE NOT EXISTS (SELECT 1 FROM task_events e WHERE e."taskId" = t.
 -- moment) and the seat they acted from. Older records simply have none.
 ALTER TABLE approval_records ADD COLUMN IF NOT EXISTS snapshot jsonb;
 ALTER TABLE approval_records ADD COLUMN IF NOT EXISTS "actorPosition" text;
+
+-- Delay reminders: remembers when a stuck request's step holders were last nudged.
+CREATE TABLE IF NOT EXISTS approval_reminders (
+  "periodId"   text NOT NULL REFERENCES payroll_periods(id) ON DELETE CASCADE,
+  step         integer NOT NULL,
+  "remindedAt" timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY ("periodId", step)
+);
+
+-- Audit log: who changed a rate, a position, a user or a project, and when.
+-- Append-only; passwords and bank account numbers are never stored in it.
+CREATE TABLE IF NOT EXISTS audit_log (
+  id           bigserial PRIMARY KEY,
+  "actorId"    text REFERENCES users(id) ON DELETE SET NULL,
+  "actorName"  text,
+  action       text NOT NULL,
+  "entityType" text NOT NULL,
+  "entityId"   text,
+  summary      text NOT NULL,
+  detail       jsonb,
+  "createdAt"  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS audit_log_created_idx ON audit_log ("createdAt" DESC);
+CREATE INDEX IF NOT EXISTS audit_log_entity_idx ON audit_log ("entityType", "entityId");
+
+-- Offline attendance: entries recorded without signal and uploaded later keep
+-- the time they were really recorded at.
+ALTER TABLE worker_attendance ADD COLUMN IF NOT EXISTS "offlineRecordedAt" timestamptz;

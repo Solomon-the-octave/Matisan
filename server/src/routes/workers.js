@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { audit, changes, describe } from '../audit.js';
 import { rows, row, query, generateWorkerId } from '../db.js';
 import { requireAuth } from '../middleware/auth.js';
 import { canAccessProject } from './projects.js';
@@ -97,6 +98,7 @@ router.post('/', requireAuth, async (req, res) => {
     ]
   );
   const worker = await row('SELECT * FROM workers WHERE id = $1', [id]);
+  await audit(req.user, 'worker.create', 'worker', id, `Registered worker ${name}${worker.dailyRate ? ` at ${worker.dailyRate} per day` : ''}`);
   res.status(201).json({ worker: withLaborType(worker) });
 });
 
@@ -132,6 +134,12 @@ router.put('/:id', requireAuth, async (req, res) => {
     ]
   );
   const updated = await row('SELECT * FROM workers WHERE id = $1', [worker.id]);
+  const diff = changes(worker, updated, ['name', 'trade', 'phone', 'dailyRate', 'projectId']);
+  const bankChanged = bankAccount !== undefined && String(worker.bankAccount ?? '') !== String(updated.bankAccount ?? '');
+  if (diff.length || bankChanged) {
+    await audit(req.user, diff.some((c) => c.field === 'dailyRate') ? 'worker.rate' : 'worker.update', 'worker', worker.id,
+      `Updated worker ${worker.name}: ${[describe(diff), bankChanged ? 'bank account changed' : ''].filter(Boolean).join('; ')}`, { changes: diff, bankChanged });
+  }
   res.json({ worker: withLaborType(updated) });
 });
 
