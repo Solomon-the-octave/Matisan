@@ -27,6 +27,13 @@ const TASK_SELECT = `
   LEFT JOIN projects p ON p.id = t."projectId"
 `;
 
+const logEvent = (taskId, actorId, type, detail, fromUser = null, toUser = null) =>
+  query(
+    'INSERT INTO task_events ("taskId","actorId",type,detail,"fromUser","toUser") VALUES ($1,$2,$3,$4,$5,$6)',
+    [taskId, actorId, type, detail, fromUser, toUser]
+  );
+const STATUS_LABEL = { created: 'Created', in_progress: 'In progress', submitted: 'Submitted', approved: 'Approved', completed: 'Completed' };
+
 async function validateTaskTargets({ department, assignedTo, projectId }) {
   const assignee = await row('SELECT * FROM users WHERE id = $1', [assignedTo]);
   if (!assignee) return 'Responsible person not found';
@@ -63,7 +70,13 @@ function visibleTasks(user) {
   if (user.role === 'supervisor') {
     return rows(`${TASK_SELECT} WHERE t.department = $1 ORDER BY t."createdAt" DESC`, [user.department]);
   }
-  return rows(`${TASK_SELECT} WHERE t."assignedTo" = $1 ORDER BY t."createdAt" DESC`, [user.id]);
+  // Current tasks plus tasks that were reassigned away from this person (history stays visible).
+  return rows(
+    `${TASK_SELECT} WHERE t."assignedTo" = $1
+        OR t.id IN (SELECT "taskId" FROM task_events WHERE type = 'reassigned' AND "fromUser" = $1)
+     ORDER BY t."createdAt" DESC`,
+    [user.id]
+  );
 }
 
 router.get('/', requireAuth, async (req, res) => {
@@ -87,6 +100,7 @@ router.post('/', requireAuth, requireRole('admin', 'supervisor'), async (req, re
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'created',$9)`,
     [id, title, description || '', projectId || null, department, assignedTo, req.user.id, priority || 'medium', dueDate || null]
   );
+  await logEvent(id, req.user.id, 'created', 'Task created', null, assignedTo);
   await notify(assignedTo === req.user.id ? [] : [assignedTo], { type: 'task', title: `New task: ${String(title).slice(0, 80)}`, body: dueDate ? `Due ${dueDate}` : null, link: '/tasks' });
   res.status(201).json({ task: await row(`${TASK_SELECT} WHERE t.id = $1`, [id]) });
 });
@@ -106,14 +120,23 @@ router.put('/:id', requireAuth, async (req, res) => {
     if (status && !allowed.includes(status)) {
       return res.status(403).json({ error: 'You can only mark a task in progress or submitted' });
     }
-    if (status) await query('UPDATE tasks SET status = $1 WHERE id = $2', [status, task.id]);
+    if (status) {
+      await query('UPDATE tasks SET status = $1 WHERE id = $2', [status, task.id]);
+      if (status !== task.status) await logEvent(task.id, req.user.id, 'status', `Status: ${STATUS_LABEL[task.status] || task.status} to ${STATUS_LABEL[status] || status}`);
+    }
   } else {
     if (assignedTo && assignedTo !== task.assignedTo) {
       const targetErr = await validateTaskTargets({ department: task.department, assignedTo, projectId: task.projectId });
       if (targetErr) return res.status(400).json({ error: targetErr });
       await query('UPDATE tasks SET "assignedTo" = $1 WHERE id = $2', [assignedTo, task.id]);
+      const names = await rows('SELECT id, name FROM users WHERE id = ANY($1)', [[task.assignedTo, assignedTo]]);
+      const nm = (id) => names.find((n) => n.id === id)?.name || 'Unknown';
+      await logEvent(task.id, req.user.id, 'reassigned', `Reassigned from ${nm(task.assignedTo)} to ${nm(assignedTo)}`, task.assignedTo, assignedTo);
       if (assignedTo !== req.user.id) await notify([assignedTo], { type: 'task', title: `New task: ${String(task.title).slice(0, 80)}`, body: task.dueDate ? `Due ${task.dueDate}` : null, link: '/tasks' });
     }
+    if (status && status !== task.status) await logEvent(task.id, req.user.id, 'status', `Status: ${STATUS_LABEL[task.status] || task.status} to ${STATUS_LABEL[status] || status}`);
+    if (priority && priority !== task.priority) await logEvent(task.id, req.user.id, 'priority', `Priority: ${task.priority} to ${priority}`);
+    if (dueDate !== undefined && (dueDate || null) !== (task.dueDate || null)) await logEvent(task.id, req.user.id, 'due', `Due date: ${task.dueDate || 'none'} to ${dueDate || 'none'}`);
     await query(
       `UPDATE tasks SET
          status = COALESCE($1, status),
@@ -126,6 +149,23 @@ router.put('/:id', requireAuth, async (req, res) => {
     );
   }
   res.json({ task: await row(`${TASK_SELECT} WHERE t.id = $1`, [task.id]) });
+});
+
+// Task history: the manager, the current assignee and anyone it was
+// reassigned away from can read the dated trail.
+router.get('/:id/events', requireAuth, async (req, res) => {
+  const task = await row('SELECT * FROM tasks WHERE id = $1', [req.params.id]);
+  if (!task) return res.status(404).json({ error: 'Task not found' });
+  const canManage = req.user.isGlobalAdmin || (req.user.role === 'supervisor' && task.department === req.user.department);
+  const involved = task.assignedTo === req.user.id ||
+    (await row(`SELECT 1 AS x FROM task_events WHERE "taskId" = $1 AND type = 'reassigned' AND "fromUser" = $2 LIMIT 1`, [task.id, req.user.id]));
+  if (!canManage && !involved) return res.status(403).json({ error: 'Not authorized for this task' });
+  const events = await rows(
+    `SELECT e.id, e.type, e.detail, e."createdAt", u.name AS "actorName"
+     FROM task_events e LEFT JOIN users u ON u.id = e."actorId" WHERE e."taskId" = $1 ORDER BY e."createdAt", e.id`,
+    [task.id]
+  );
+  res.json({ events });
 });
 
 // --- Task attachments -----------------------------------------------------

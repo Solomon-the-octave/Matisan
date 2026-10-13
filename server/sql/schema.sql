@@ -339,3 +339,21 @@ CREATE INDEX IF NOT EXISTS notifications_user_idx ON notifications ("userId", "c
 
 -- Deactivated users keep their history but cannot sign in or hold seats.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS "isActive" boolean NOT NULL DEFAULT true;
+
+-- Task history: append-only dated events per task (created, status moves,
+-- reassignments, priority/due-date changes). Reassigned tasks keep their
+-- history and the earlier assignee can still see the task as a past task.
+CREATE TABLE IF NOT EXISTS task_events (
+  id         bigserial PRIMARY KEY,
+  "taskId"   text NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+  "actorId"  text REFERENCES users(id),
+  type       text NOT NULL,
+  detail     text,
+  "fromUser" text,
+  "toUser"   text,
+  "createdAt" timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS task_events_task_idx ON task_events ("taskId", "createdAt");
+INSERT INTO task_events ("taskId", "actorId", type, detail, "toUser", "createdAt")
+SELECT t.id, t."createdBy", 'created', 'Task created', t."assignedTo", t."createdAt"
+FROM tasks t WHERE NOT EXISTS (SELECT 1 FROM task_events e WHERE e."taskId" = t.id);

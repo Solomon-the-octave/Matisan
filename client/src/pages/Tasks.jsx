@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, X, Paperclip, Download, Trash2, Upload, Loader2, UserRound, Building2, FolderKanban, CalendarDays } from 'lucide-react'
+import { Plus, X, Paperclip, Download, Trash2, Upload, Loader2, UserRound, Building2, FolderKanban, CalendarDays, History } from 'lucide-react'
 import Layout from '../components/Layout'
 import Badge from '../components/Badge'
 import api from '../api'
@@ -30,6 +30,9 @@ export default function Tasks() {
   const [openDocs, setOpenDocs] = useState(null)
   const [docsByTask, setDocsByTask] = useState({})
   const [uploadingFor, setUploadingFor] = useState(null)
+  const [showPast, setShowPast] = useState(false)
+  const [openHistory, setOpenHistory] = useState(null)
+  const [eventsByTask, setEventsByTask] = useState({})
   const canManage = user.role === 'admin' || user.role === 'supervisor'
 
   async function load() {
@@ -155,6 +158,18 @@ export default function Tasks() {
     URL.revokeObjectURL(url)
   }
 
+  async function toggleHistory(taskId) {
+    if (openHistory === taskId) return setOpenHistory(null)
+    setOpenHistory(taskId)
+    const res = await api.get(`/tasks/${taskId}/events`)
+    setEventsByTask((m) => ({ ...m, [taskId]: res.data.events }))
+  }
+
+  // A past task is finished, or (for staff) one that was reassigned to someone else.
+  const isPast = (t) => t.status === 'completed' || t.assignedTo !== user.id && !canManage
+  const pastCount = tasks.filter(isPast).length
+  const shownTasks = showPast ? tasks : tasks.filter((t) => !isPast(t))
+
   function nextLabel(status) {
     const map = { created: 'Start', in_progress: 'Submit', submitted: 'Approve', approved: 'Complete' }
     return map[status]
@@ -186,8 +201,16 @@ export default function Tasks() {
         </div>
       )}
 
+      {pastCount > 0 && (
+        <div className="mb-3 flex justify-end">
+          <button onClick={() => setShowPast((v) => !v)} className="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:text-brand-700">
+            {showPast ? 'Hide past tasks' : `Show past tasks (${pastCount})`}
+          </button>
+        </div>
+      )}
+
       <div className="space-y-3">
-        {tasks.map((t) => {
+        {shownTasks.map((t) => {
           const isOwner = t.assignedTo === user.id
           // Employees can only start/submit their own work; supervisors and
           // admins can move it the rest of the way.
@@ -237,6 +260,23 @@ export default function Tasks() {
                 </div>
               </div>
 
+              <div className="mt-3 border-t border-slate-100 dark:border-slate-800 pt-3">
+                <button onClick={() => toggleHistory(t.id)} className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-600 dark:text-brand-400 hover:text-brand-700">
+                  <History size={13} /> History
+                </button>
+                {openHistory === t.id && (
+                  <ol className="mt-2 space-y-1.5 border-l border-slate-200 dark:border-slate-700 pl-3">
+                    {(eventsByTask[t.id] || []).map((e) => (
+                      <li key={e.id} className="text-xs text-slate-600 dark:text-slate-300">
+                        <span className="text-slate-400">{new Date(e.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                        {' '}{e.detail}{e.actorName ? ` (by ${e.actorName})` : ''}
+                      </li>
+                    ))}
+                    {eventsByTask[t.id]?.length === 0 && <li className="text-xs text-slate-400">No history yet.</li>}
+                  </ol>
+                )}
+              </div>
+
               {(t.attachmentCount > 0 || canManage) && (
                 <div className="mt-3 border-t border-slate-100 dark:border-slate-800 pt-3">
                   <button
@@ -279,7 +319,7 @@ export default function Tasks() {
             </div>
           )
         })}
-        {tasks.length === 0 && <p className="text-sm text-slate-400">No tasks assigned.</p>}
+        {shownTasks.length === 0 && <p className="text-sm text-slate-400">{tasks.length ? 'No current tasks. Past tasks are hidden.' : 'No tasks assigned.'}</p>}
       </div>
 
       {showForm && (
