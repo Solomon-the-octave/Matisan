@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { CheckCircle2, Circle, CornerUpLeft, Loader2, Banknote, Paperclip, Printer } from 'lucide-react'
+import PeriodReview from './PeriodReview'
 import api from '../api'
 
 // The paper "critical path" for one week of payroll: Prepared, Checked,
@@ -21,6 +22,8 @@ export default function ApprovalTrail({ periodId, onChange }) {
   const [busy, setBusy] = useState(false)
   const [returning, setReturning] = useState(false)
   const [reason, setReason] = useState('')
+  const [confirming, setConfirming] = useState(false)
+  const [note, setNote] = useState('')
   const [error, setError] = useState('')
   const [showHistory, setShowHistory] = useState(true)
   const [payForm, setPayForm] = useState({ amountPaid: '', paidDate: new Date().toISOString().slice(0, 10), reference: '', method: '', proof: null })
@@ -39,10 +42,12 @@ export default function ApprovalTrail({ periodId, onChange }) {
     setBusy(true)
     setError('')
     try {
-      const res = await api.post(`/approvals/period/${periodId}/${kind}`, kind === 'return' ? { comment: reason } : {})
+      const res = await api.post(`/approvals/period/${periodId}/${kind}`, kind === 'return' ? { comment: reason } : { comment: note.trim() || undefined })
       setData(res.data)
       setReturning(false)
+      setConfirming(false)
       setReason('')
+      setNote('')
       onChange?.()
     } catch (e) {
       setError(e.response?.data?.error || 'Could not save that action')
@@ -96,6 +101,7 @@ export default function ApprovalTrail({ periodId, onChange }) {
         {payrollTotal != null && <span>Payroll total <b className="text-slate-700 dark:text-slate-200">{money(payrollTotal)}</b> ETB</span>}
         <button type="button" onClick={() => window.print()} className="no-print ml-auto inline-flex items-center gap-1 rounded-md border border-slate-200 dark:border-slate-700 px-2 py-1 font-semibold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800"><Printer size={12} /> Print</button>
       </div>
+      {period.currentStep >= 2 || payment ? <PeriodReview periodId={periodId} defaultOpen={canAct && !payStep} refreshKey={history.length} /> : null}
       <ol className="space-y-0">
         {steps.map((s, i) => {
           const st = STYLE[s.status]
@@ -172,12 +178,27 @@ export default function ApprovalTrail({ periodId, onChange }) {
         <div className="mt-1 rounded-lg bg-slate-50 dark:bg-slate-800 p-3">
           {!returning ? (
             <div className="flex flex-wrap items-center gap-2">
+              {confirming ? (
+                <div className="w-full space-y-2">
+                  <p className="text-xs text-slate-600 dark:text-slate-300">
+                    You are about to mark <b>{current.label}</b> for <b>{period.requestNo || 'this request'}</b>, {period.projectName}, payroll total <b>{money(payrollTotal)} ETB</b>. This is recorded with your name and the time.
+                  </p>
+                  <textarea rows={2} maxLength={300} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a note (optional)" className="input text-xs" />
+                  <div className="flex gap-2">
+                    <button onClick={() => act('complete')} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
+                      {busy ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />} Confirm
+                    </button>
+                    <button onClick={() => { setConfirming(false); setNote('') }} className="rounded-lg px-3 py-2 text-xs font-semibold text-slate-500 hover:bg-white dark:hover:bg-slate-700">Cancel</button>
+                  </div>
+                </div>
+              ) : (
+              <>
               <button
-                onClick={() => act('complete')}
+                onClick={() => setConfirming(true)}
                 disabled={busy}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
               >
-                {busy ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />} {current.action || 'Approve'} — {current.label}
+                <CheckCircle2 size={13} /> {current.action || 'Approve'} — {current.label}
               </button>
               {canReturn && (
                 <button
@@ -186,6 +207,8 @@ export default function ApprovalTrail({ periodId, onChange }) {
                 >
                   <CornerUpLeft size={13} /> Return
                 </button>
+              )}
+              </>
               )}
             </div>
           ) : (

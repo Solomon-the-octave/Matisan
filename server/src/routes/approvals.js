@@ -288,6 +288,100 @@ router.get('/waiting', requireAuth, async (req, res) => {
   res.json({ items });
 });
 
+// Everything a reviewer needs to judge a week before approving it: the
+// project, the payroll line by line, the day-by-day attendance behind it, the
+// field hand-in notes, and plain-language flags for things worth a second look.
+// Read-only; it adds no step and blocks nothing.
+router.get('/period/:id/review', requireAuth, async (req, res) => {
+  const period = await loadPeriod(req.params.id);
+  if (!period) return res.status(404).json({ error: 'Payroll period not found' });
+  if (!(await canViewPeriod(req.user, period))) return res.status(403).json({ error: 'You do not have access to this week' });
+
+  const from = String(period.weekStart).slice(0, 10);
+  const to = String(period.weekEnd).slice(0, 10);
+  const calc = await computePayroll(SYSTEM_VIEW, { projectId: period.projectId, from, to });
+  const project = await row(
+    `SELECT p.name, p."projectNumber", p.client, p.site, p.status, m.name AS "managerName"
+     FROM projects p LEFT JOIN users m ON m.id = p."managerId" WHERE p.id = $1`, [period.projectId]);
+
+  const days = [];
+  for (let d = new Date(from + 'T00:00:00Z'); d.toISOString().slice(0, 10) <= to; d = new Date(d.getTime() + 86400000)) days.push(d.toISOString().slice(0, 10));
+  const att = await rows(
+    `SELECT "workerId", date, am, pm, "otHours", "lateHours", "offlineRecordedAt" FROM worker_attendance
+     WHERE "projectId" = $1 AND date >= $2 AND date <= $3`, [period.projectId, from, to]);
+  const grid = {};
+  const missed = {};
+  let offlineCount = 0;
+  for (const a of att) {
+    (grid[a.workerId] ||= {})[String(a.date).slice(0, 10)] = { am: a.am, pm: a.pm, ot: Number(a.otHours) || 0, late: Number(a.lateHours) || 0 };
+    missed[a.workerId] = (missed[a.workerId] || 0) + (Number(a.lateHours) || 0);
+    if (a.offlineRecordedAt) offlineCount += 1;
+  }
+  const dayTotals = days.map((d) => ({
+    date: d,
+    present: att.filter((a) => String(a.date).slice(0, 10) === d && (a.am || a.pm)).length,
+    ot: att.filter((a) => String(a.date).slice(0, 10) === d).reduce((t, a) => t + (Number(a.otHours) || 0), 0),
+  }));
+
+  const payroll = calc.payroll.map((w) => ({
+    workerId: w.workerId, name: w.name, trade: w.trade, laborType: w.laborType, dailyRate: w.dailyRate, hasBank: !!w.bankAccount,
+    daysPresent: w.daysPresent, otHours: w.otHours, hoursMissed: missed[w.workerId] || 0, basePay: w.basePay, otPay: w.otPay, total: w.total,
+  }));
+
+  const handIn = await rows(
+    `SELECT s.type, s.status, s."periodStart", s."submittedAt", s."employeeNote", s."reviewNote", s."reviewedAt", u.name AS "submittedByName", r.name AS "reviewedByName"
+     FROM attendance_submissions s JOIN users u ON u.id = s."submittedBy" LEFT JOIN users r ON r.id = s."reviewedBy"
+     WHERE s."projectId" = $1 AND s."periodStart" >= $2 AND s."periodStart" <= $3 ORDER BY s."periodStart", s.type`, [period.projectId, from, to]);
+
+  // Plain-language things worth a second look. They never block anything.
+  const flags = [];
+  const warn = (text) => flags.push({ level: 'warn', text });
+  const info = (text) => flags.push({ level: 'info', text });
+  for (const w of payroll) {
+    if (!w.dailyRate) warn(`${w.name} has no daily rate, so their pay cannot be calculated.`);
+    if (!w.hasBank) info(`${w.name} has no bank account on file.`);
+    const g = grid[w.workerId] || {};
+    const maxOt = Math.max(0, ...Object.values(g).map((x) => x.ot));
+    if (maxOt > 4) warn(`${w.name} has ${maxOt} OT hours on one day, which is high.`);
+    else if (w.otHours > 20) warn(`${w.name} has ${w.otHours} OT hours this week, which is high.`);
+    if (Object.values(g).filter((x) => x.am || x.pm).length >= 7) info(`${w.name} worked all 7 days with no rest day.`);
+  }
+  const seen = {};
+  for (const w of payroll) {
+    const k = String(w.name).trim().toLowerCase();
+    if (seen[k]) warn(`Two workers are named "${w.name}". Check it is not a duplicate registration.`);
+    seen[k] = true;
+  }
+  const registered = await rows('SELECT id, name FROM workers WHERE "projectId" = $1', [period.projectId]);
+  const idle = registered.filter((w) => !grid[w.id]);
+  if (idle.length) info(`${idle.length} registered ${idle.length === 1 ? 'worker has' : 'workers have'} no attendance this week: ${idle.slice(0, 5).map((w) => w.name).join(', ')}${idle.length > 5 ? ' and more' : ''}.`);
+  if (!payroll.length) warn('No attendance was recorded for this week.');
+  if (offlineCount) info(`${offlineCount} attendance ${offlineCount === 1 ? 'entry was' : 'entries were'} recorded offline and uploaded later.`);
+
+  // Did the figures change since the last person acted?
+  const records = await periodRecords(period.id);
+  const lastWithFigures = [...records].reverse().find((r) => r.snapshot);
+  const total = calc.totals?.cost || 0;
+  let sinceLast = null;
+  if (lastWithFigures) {
+    const before = Number(lastWithFigures.snapshot.cost) || 0;
+    if (Math.abs(before - total) > 0.005) {
+      sinceLast = { from: before, to: total, by: lastWithFigures.userName, at: lastWithFigures.actionDate };
+      warn(`The total changed from ${before.toLocaleString()} to ${total.toLocaleString()} ETB since ${lastWithFigures.userName} last acted.`);
+    }
+  }
+  const lastReturnIdx = records.map((r) => r.action).lastIndexOf('returned');
+  // Only worth showing while nothing has been completed since it was sent back.
+  const lastReturn = lastReturnIdx >= 0 && !records.slice(lastReturnIdx + 1).some((r) => r.action === 'completed') ? records[lastReturnIdx] : null;
+
+  res.json({
+    project, period: { requestNo: period.requestNo, weekStart: from, weekEnd: to, currentStep: period.currentStep },
+    totals: { workers: calc.totals?.workers || 0, daysPresent: calc.totals?.daysPresent || 0, otHours: calc.totals?.otHours || 0, cost: total, byLaborType: calc.totals?.byLaborType || {} },
+    payroll, days, grid, dayTotals, handIn, flags, sinceLast,
+    lastReturn: lastReturn ? { by: lastReturn.userName, at: lastReturn.actionDate, note: lastReturn.comment } : null,
+  });
+});
+
 router.get('/period/:id', requireAuth, async (req, res) => {
   const period = await loadPeriod(req.params.id);
   if (!period) return res.status(404).json({ error: 'Payroll period not found' });
