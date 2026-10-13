@@ -12,6 +12,7 @@ import Reports from './pages/Reports'
 import Profile from './pages/Profile'
 import Organization from './pages/Organization'
 import Approvals from './pages/Approvals'
+import Finance from './pages/Finance'
 import ProtectedRoute from './components/ProtectedRoute'
 
 export default function App() {
@@ -26,6 +27,7 @@ export default function App() {
       <Route path="/attendance" element={<ProtectedRoute><Attendance /></ProtectedRoute>} />
       <Route path="/field-attendance" element={<ProtectedRoute><FieldAttendance /></ProtectedRoute>} />
       <Route path="/payroll-review" element={<ProtectedRoute roles={['admin', 'supervisor', 'finance']}><PayrollReview /></ProtectedRoute>} />
+      <Route path="/finance" element={<ProtectedRoute><Finance /></ProtectedRoute>} />
       <Route path="/approvals" element={<ProtectedRoute><Approvals /></ProtectedRoute>} />
       <Route path="/reports" element={<ProtectedRoute roles={['admin', 'supervisor', 'finance']}><Reports /></ProtectedRoute>} />
       <Route path="/organization" element={<ProtectedRoute><Organization /></ProtectedRoute>} />

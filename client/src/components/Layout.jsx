@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Building2, Users, FolderKanban, ListChecks,
   CalendarCheck, FileBarChart, UserCircle, LogOut, Bell, Menu, X, HardHat, ClipboardCheck,
-  Sun, Moon, Network, ShieldCheck, Printer,
+  Sun, Moon, Network, ShieldCheck, Printer, Landmark,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import api from '../api'
@@ -22,6 +22,7 @@ const NAV = {
     { to: '/field-attendance', label: 'Field Attendance', icon: HardHat },
     { to: '/approvals', label: 'Approvals', icon: ShieldCheck },
     { to: '/payroll-review', label: 'Payroll Review', icon: ClipboardCheck },
+    { to: '/finance', label: 'HO Finance', icon: Landmark },
     { to: '/reports', label: 'Reports', icon: FileBarChart },
     { to: '/organization', label: 'Head Office', icon: Network },
   ],
@@ -49,6 +50,7 @@ const NAV = {
     { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/approvals', label: 'Approvals', icon: ShieldCheck },
     { to: '/payroll-review', label: 'Payroll Review', icon: ClipboardCheck },
+    { to: '/finance', label: 'HO Finance', icon: Landmark },
     { to: '/reports', label: 'Reports', icon: FileBarChart },
     { to: '/organization', label: 'Head Office', icon: Network },
     { to: '/profile', label: 'Profile', icon: UserCircle },
