@@ -16,6 +16,29 @@ function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
+// Field staff (time keeper, foreman and so on) may only record or change
+// attendance for TODAY. Earlier days and weeks are read-only for them unless
+// a supervisor has returned that period for correction. Addis Ababa's date
+// is accepted as well as the UTC one so early-morning entries still count.
+function todaySet() {
+  const addis = new Date().toLocaleDateString('en-CA', { timeZone: 'Africa/Addis_Ababa' });
+  return new Set([todayStr(), addis]);
+}
+
+async function pastDayBlocked(user, projectId, date) {
+  if (user.isGlobalAdmin || user.role !== 'employee') return null;
+  if (todaySet().has(String(date).slice(0, 10))) return null;
+  if (projectId) {
+    const open = await row(
+      `SELECT 1 AS x FROM attendance_submissions
+       WHERE "projectId" = $1 AND status = 'returned' AND $2 >= "periodStart" AND $2 <= "periodEnd"`,
+      [projectId, String(date).slice(0, 10)]
+    );
+    if (open) return null;
+  }
+  return 'Attendance can only be recorded for today. Earlier days are locked. Ask your supervisor to return the week if something must be corrected.';
+}
+
 async function assignedProjectIds(user) {
   const r = await rows('SELECT "projectId" FROM project_assignments WHERE "userId" = $1', [user.id]);
   return r.map((x) => x.projectId);
@@ -90,6 +113,8 @@ router.post('/', requireAuth, async (req, res) => {
   }
 
   const day = date || todayStr();
+  const blockedPost = await pastDayBlocked(req.user, effectiveProjectId, day);
+  if (blockedPost) return res.status(423).json({ error: blockedPost });
   if (effectiveProjectId && !req.user.isGlobalAdmin && (await findLockedPeriod(effectiveProjectId, day))) {
     return res.status(423).json({ error: 'This week has passed the site checks and is with head office, so it is locked. Ask an admin to reopen it.' });
   }
@@ -145,6 +170,8 @@ router.put('/:id', requireAuth, async (req, res) => {
       return res.status(403).json({ error: "You're not assigned to that project" });
     }
   }
+  const blockedPut = await pastDayBlocked(req.user, record.projectId, String(record.date).slice(0, 10));
+  if (blockedPut) return res.status(423).json({ error: blockedPut });
   if (record.projectId && !req.user.isGlobalAdmin && (await findLockedPeriod(record.projectId, record.date))) {
     return res.status(423).json({ error: 'This week has passed the site checks and is with head office, so it is locked. Ask an admin to reopen it.' });
   }

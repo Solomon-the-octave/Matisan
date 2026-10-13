@@ -313,7 +313,10 @@ export default function FieldAttendance() {
   // The field team (employees) records and hands in attendance; supervisors
   // and admin only review it, so for them everything here is view-only.
   const readOnly = !isEmployee
-  const dateLocked = (d) => readOnly || submissions.some((x) => handedIn(x) && d >= x.periodStart && d <= x.periodEnd)
+  // Field staff can only change TODAY. Earlier days are read-only unless a
+  // supervisor returned that period for correction (the server enforces it).
+  const correctionOpen = (d) => submissions.some((x) => x.status === 'returned' && d >= x.periodStart && d <= x.periodEnd)
+  const dateLocked = (d) => readOnly || submissions.some((x) => handedIn(x) && d >= x.periodStart && d <= x.periodEnd) || (d !== today && !correctionOpen(d))
   const rosterLocked = weekLocked || dateLocked(today)  // dateLocked covers read-only
   const pendingReview = submissions.filter((x) => x.status === 'submitted').length
 
@@ -698,6 +701,7 @@ export default function FieldAttendance() {
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm text-slate-500">
               {weekStart} – {weekEnd} · tap a box to mark it, same as filling in the paper sheet by hand.
+              {isEmployee && <span className="mt-0.5 block text-[11px] text-slate-400">Only today can be changed. Earlier days are locked; ask your supervisor to return the week if something needs correcting.</span>}
             </p>
             <button
               onClick={() => downloadCsv(
