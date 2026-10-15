@@ -358,7 +358,20 @@ export async function computePayroll(user, { projectId, from, to } = {}) {
 
 router.get('/payroll', requireAuth, async (req, res) => {
   const { projectId, from, to } = req.query;
-  res.json(await computePayroll(req.user, { projectId, from, to }));
+  const result = await computePayroll(req.user, { projectId, from, to });
+  // The field team records days and OT hours; pay figures are worked out and
+  // seen by supervisors, finance, head office and admin. Strip them here so
+  // they never leave the server for field staff.
+  if (req.user.role === 'employee' && !req.user.isGlobalAdmin) {
+    const blank = (w) => ({ ...w, dailyRate: null, basePay: null, otPay: null, total: null });
+    result.payroll = (result.payroll || []).map(blank);
+    if (result.totals) {
+      result.totals.cost = null;
+      for (const b of Object.values(result.totals.byLaborType || {})) b.cost = null;
+    }
+    result.moneyHidden = true;
+  }
+  res.json(result);
 });
 
 // CSV downloads matching the paper sheets column-for-column, so a supervisor

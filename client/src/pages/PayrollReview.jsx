@@ -234,10 +234,10 @@ export default function PayrollReview() {
                     {totals ? (
                       <>
                         <Wallet size={12} className="mr-1 inline text-slate-300 dark:text-slate-600" />
-                        {totals.cost.toLocaleString()} <span className="text-[11px] text-slate-400">({totals.workers} workers)</span>
+                        {totals.cost?.toLocaleString() ?? '-'} <span className="text-[11px] text-slate-400">({totals.workers} workers)</span>
                         {totals.byLaborType && (
                           <div className="mt-0.5 text-[11px] text-slate-400">
-                            Skilled {totals.byLaborType.Skilled.cost.toLocaleString()} · Non-Skilled {totals.byLaborType['Non-Skilled'].cost.toLocaleString()}
+                            Skilled {totals.byLaborType.Skilled.cost?.toLocaleString() ?? '-'} · Non-Skilled {totals.byLaborType['Non-Skilled'].cost?.toLocaleString() ?? '-'}
                           </div>
                         )}
                       </>

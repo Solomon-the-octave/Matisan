@@ -10,8 +10,37 @@ export async function notify(userIds, { type, title, body = null, link = null })
         [generateId('ntf'), userId, type, String(title).slice(0, 200), body ? String(body).slice(0, 400) : null, link]
       );
     }
+    // Copy to email as well, so a person who is not logged in still hears.
+    // Off until RESEND_API_KEY and EMAIL_FROM are set; never blocks the action.
+    if (emailEnabled()) sendEmails(ids, { title, body, link }).catch((e) => console.error('email failed:', e.message));
   } catch (e) {
     console.error('notify failed:', e.message);
+  }
+}
+
+export function emailEnabled() {
+  return !!(process.env.RESEND_API_KEY && process.env.EMAIL_FROM);
+}
+
+const esc = (t) => String(t ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+async function sendEmails(userIds, { title, body, link }) {
+  const people = await rows('SELECT name, email FROM users WHERE id = ANY($1) AND COALESCE("isActive", true) = true AND email IS NOT NULL', [userIds]);
+  const base = (process.env.APP_URL || '').replace(/\/$/, '');
+  const url = link && base ? base + link : base || null;
+  for (const u of people) {
+    const html = `<div style="font-family:Arial,sans-serif;font-size:14px;color:#1e293b">
+      <p>Hello ${esc(u.name)},</p>
+      <p><b>${esc(title)}</b></p>
+      ${body ? `<p>${esc(body)}</p>` : ''}
+      ${url ? `<p><a href="${esc(url)}" style="background:#1d4ed8;color:#fff;padding:8px 14px;border-radius:6px;text-decoration:none">Open Matisan HR</a></p>` : ''}
+      <p style="color:#94a3b8;font-size:12px">Matisan Engineering Private Ltd Co. This is an automatic message.</p></div>`;
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: process.env.EMAIL_FROM, to: [u.email], subject: String(title).slice(0, 150), html }),
+    });
+    if (!res.ok) console.error('email to', u.email, 'failed:', res.status, (await res.text()).slice(0, 200));
   }
 }
 

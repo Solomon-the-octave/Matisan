@@ -30,3 +30,11 @@ services:
         sync: false # optional — defaults to admin@matisans.com if unset
       - key: SEED_ADMIN_PASSWORD
         sync: false # optional — defaults to Admin@123 if unset; set this for a real deploy
+      # Optional email copies of notifications (approval waiting, returned,
+      # delayed, paid). Leave these unset and email is simply off.
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false # e.g. Matisan HR <hr@your-domain.com> (domain verified in Resend)
+      - key: APP_URL
+        sync: false # e.g. https://hr.your-domain.com, used for the Open link in emails

@@ -22,7 +22,7 @@ async function assignedProjectIds(user) {
 }
 
 async function visibleWorkers(user) {
-  if (user.isGlobalAdmin) return rows('SELECT * FROM workers ORDER BY "createdAt" DESC');
+  if (user.isGlobalAdmin || user.role === 'finance') return rows('SELECT * FROM workers ORDER BY "createdAt" DESC');
   if (user.role === 'employee') {
     const ids = await assignedProjectIds(user);
     if (ids.length === 0) return [];
@@ -50,7 +50,7 @@ router.get('/', requireAuth, async (req, res) => {
 router.get('/:id', requireAuth, async (req, res) => {
   const worker = await row('SELECT * FROM workers WHERE id = $1', [req.params.id]);
   if (!worker) return res.status(404).json({ error: 'Worker not found' });
-  if (!req.user.isGlobalAdmin && worker.department !== req.user.department) {
+  if (!req.user.isGlobalAdmin && req.user.role !== 'finance' && worker.department !== req.user.department) {
     return res.status(403).json({ error: 'Outside your department access point' });
   }
   res.json({ worker: withLaborType(worker) });

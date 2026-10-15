@@ -978,10 +978,12 @@ export default function FieldAttendance() {
               <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">OT hours</div>
               <div className="mt-1 text-2xl font-bold text-slate-800 dark:text-slate-100">{payroll.totals.otHours}</div>
             </div>
-            <div className="surface p-4">
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Estimated cost</div>
-              <div className="mt-1 text-2xl font-bold text-slate-800 dark:text-slate-100">{payroll.totals.cost.toLocaleString()}</div>
-            </div>
+            {!payroll.moneyHidden && (
+              <div className="surface p-4">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Estimated cost</div>
+                <div className="mt-1 text-2xl font-bold text-slate-800 dark:text-slate-100">{payroll.totals.cost.toLocaleString()}</div>
+              </div>
+            )}
           </div>
 
           {/* Skilled vs Non-Skilled — same split as Matisan's Labor Structure
@@ -996,7 +998,7 @@ export default function FieldAttendance() {
                       <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{type} labor</div>
                       <div className="text-xs text-slate-400">{b.workers} worker{b.workers === 1 ? '' : 's'} · {b.daysPresent} days · {b.otHours} OT hrs</div>
                     </div>
-                    <div className="text-xl font-bold text-slate-800 dark:text-slate-100">{b.cost.toLocaleString()}</div>
+                    {b.cost != null && <div className="text-xl font-bold text-slate-800 dark:text-slate-100">{b.cost.toLocaleString()}</div>}
                   </div>
                 )
               })}
@@ -1011,11 +1013,11 @@ export default function FieldAttendance() {
                   <th className="px-4 py-3">Worker</th>
                   <th className="px-4 py-3">Trade</th>
                   <th className="px-4 py-3">Labor Type</th>
-                  <th className="px-4 py-3">Daily Rate</th>
+                  {!payroll.moneyHidden && <th className="px-4 py-3">Daily Rate</th>}
                   <th className="px-4 py-3">Days</th>
                   <th className="px-4 py-3">OT Hrs</th>
-                  <th className="px-4 py-3">OT Pay</th>
-                  <th className="px-4 py-3">Total</th>
+                  {!payroll.moneyHidden && <th className="px-4 py-3">OT Pay</th>}
+                  {!payroll.moneyHidden && <th className="px-4 py-3">Total</th>}
                   <th className="px-4 py-3">Account</th>
                 </tr>
               </thead>
@@ -1032,11 +1034,11 @@ export default function FieldAttendance() {
                         {p.laborType}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-slate-500">{p.dailyRate ?? '-'}</td>
+                    {!payroll.moneyHidden && <td className="px-4 py-3 text-slate-500">{p.dailyRate ?? '-'}</td>}
                     <td className="px-4 py-3 text-slate-500">{p.daysPresent}</td>
                     <td className="px-4 py-3 text-slate-500">{p.otHours || 0}</td>
-                    <td className="px-4 py-3 text-slate-500">{p.otPay != null ? p.otPay.toLocaleString() : '-'}</td>
-                    <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-200">{p.total != null ? p.total.toLocaleString() : '-'}</td>
+                    {!payroll.moneyHidden && <td className="px-4 py-3 text-slate-500">{p.otPay != null ? p.otPay.toLocaleString() : '-'}</td>}
+                    {!payroll.moneyHidden && <td className="px-4 py-3 font-semibold text-slate-700 dark:text-slate-200">{p.total != null ? p.total.toLocaleString() : '-'}</td>}
                     <td className="px-4 py-3 text-xs text-slate-400">{p.bankAccount || '-'}</td>
                   </tr>
                 ))}

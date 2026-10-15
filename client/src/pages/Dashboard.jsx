@@ -137,7 +137,7 @@ export default function Dashboard() {
             app was built to replace the paper process for. */}
         <div className="mt-4 grid grid-cols-2 gap-4 md:grid-cols-4">
           <StatCard label="Site Workers On Today" value={sitePayroll?.totals.workers ?? 0} icon={HardHat} />
-          <StatCard label="Today's Labor Cost" value={(sitePayroll?.totals.cost ?? 0).toLocaleString()} icon={Wallet} />
+          {!sitePayroll?.moneyHidden && <StatCard label="Today's Labor Cost" value={(sitePayroll?.totals.cost ?? 0).toLocaleString()} icon={Wallet} />}
         </div>
 
         <div className="mt-6 grid gap-4 lg:grid-cols-2">
