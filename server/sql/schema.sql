@@ -390,3 +390,42 @@ CREATE INDEX IF NOT EXISTS audit_log_entity_idx ON audit_log ("entityType", "ent
 -- Offline attendance: entries recorded without signal and uploaded later keep
 -- the time they were really recorded at.
 ALTER TABLE worker_attendance ADD COLUMN IF NOT EXISTS "offlineRecordedAt" timestamptz;
+
+-- ---------------------------------------------------------------------------
+-- Revised company structure (Head Office and Site charts, 4 department
+-- categories). Safe to run again: new seats are added, moved seats are
+-- re-parented, and nothing that already has people assigned is removed.
+-- ---------------------------------------------------------------------------
+
+-- Head Office: Administrator -> HR, Admin
+INSERT INTO positions (id, name, type, level, "parentId", "sortOrder") VALUES
+  ('ho-hr',                  'HR',                          'head_office', 4, 'ho-administrator',     13),
+  ('ho-admin',               'Admin',                       'head_office', 4, 'ho-administrator',     14),
+  -- Contract Department: Contract Engineer, Assistant Contract Engineer, Office Engineer, Quantity Surveyor
+  ('ho-contract-engineer',   'Contract Engineer',           'head_office', 5, 'ho-contract',          15),
+  ('ho-asst-contract-engineer','Assistant Contract Engineer','head_office', 5, 'ho-contract',         16),
+  -- Construction Department -> Operation Manager -> Project Managers, Office Engineers, Equipment Managers
+  ('ho-project-manager',     'Project Managers',            'head_office', 6, 'ho-project-coordinator', 17),
+  ('ho-construction-office-engineer','Office Engineers',    'head_office', 6, 'ho-project-coordinator', 18),
+  ('ho-equipment-manager',   'Equipment Managers',          'head_office', 6, 'ho-project-coordinator', 19)
+ON CONFLICT (id) DO NOTHING;
+-- The old "Project Coordinator" seat is the chart's "Operation Manager".
+UPDATE positions SET name = 'Operation Manager', level = 5 WHERE id = 'ho-project-coordinator' AND name = 'Project Coordinator';
+
+-- Site: Project Manager -> Construction Engineer (Site Engineer, Foreman -> Trade Foremen),
+-- Office Engineers (Quantity Surveyor, Data Collector), Finance (Time Keeper, Store Keeper), Admin
+INSERT INTO positions (id, name, type, level, "parentId", "sortOrder") VALUES
+  ('site-construction-engineer','Construction Engineer',    'site', 2, 'site-project-manager',   10),
+  ('site-admin',             'Admin',                       'site', 2, 'site-project-manager',     11),
+  ('site-trade-foreman',     'Trade Foremen',               'site', 4, 'foreman',                  12)
+ON CONFLICT (id) DO NOTHING;
+UPDATE positions SET "parentId" = 'site-construction-engineer', level = 3 WHERE id = 'site-engineer' AND "parentId" = 'site-project-manager';
+UPDATE positions SET "parentId" = 'site-construction-engineer', level = 3 WHERE id = 'foreman' AND "parentId" = 'site-engineer';
+UPDATE positions SET name = 'Office Engineers' WHERE id = 'site-office-engineer' AND name = 'Office Engineer';
+
+-- Department categories from the chart: Managers, Engineering, Finance, Administration.
+INSERT INTO departments (id, name, icon, description) VALUES
+  ('dept-managers', 'Managers', 'briefcase', 'General Manager, Deputy General Manager, Core Department Manager and Project Managers')
+ON CONFLICT (id) DO NOTHING;
+UPDATE departments SET name = 'Engineering' WHERE id = 'dept-eng' AND name = 'Engineering & Projects';
+UPDATE departments SET name = 'Finance' WHERE id = 'dept-finance' AND name = 'Finance & Procurement';

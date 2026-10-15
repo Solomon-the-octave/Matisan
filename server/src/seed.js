@@ -20,9 +20,10 @@ async function main() {
     console.log('Seeding departments...');
     const departments = [
       { id: 'dept-admin', name: 'Administration', icon: 'building', description: 'Company-wide oversight, HR & operations' },
-      { id: 'dept-eng', name: 'Engineering & Projects', icon: 'drafting-compass', description: 'Design, project management & site delivery' },
+      { id: 'dept-managers', name: 'Managers', icon: 'briefcase', description: 'General Manager, Deputy General Manager, Core Department Manager and Project Managers' },
+      { id: 'dept-eng', name: 'Engineering', icon: 'drafting-compass', description: 'Design, project management & site delivery' },
       { id: 'dept-field', name: 'Field Operations', icon: 'hard-hat', description: 'Site crews, construction & field execution' },
-      { id: 'dept-finance', name: 'Finance & Procurement', icon: 'wallet', description: 'Budgets, payroll & procurement' },
+      { id: 'dept-finance', name: 'Finance', icon: 'wallet', description: 'Budgets, payroll & procurement' },
       { id: 'dept-hr', name: 'Human Resources', icon: 'users', description: 'People operations, hiring & compliance' },
     ];
     for (const d of departments) {
