@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, Building2, Users, FolderKanban, ListChecks,
   CalendarCheck, FileBarChart, UserCircle, LogOut, Bell, Menu, X, HardHat, ClipboardCheck,
-  Sun, Moon, Network, ShieldCheck, Printer, Landmark, History,
+  Sun, Moon, Network, ShieldCheck, Printer, Landmark, History, CalendarDays,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import api from '../api'
@@ -25,6 +25,7 @@ const NAV = {
     { to: '/finance', label: 'HO Finance', icon: Landmark },
     { to: '/reports', label: 'Reports', icon: FileBarChart },
     { to: '/organization', label: 'Head Office', icon: Network },
+    { to: '/holidays', label: 'Holidays', icon: CalendarDays },
     { to: '/audit', label: 'Audit log', icon: History },
   ],
   supervisor: [

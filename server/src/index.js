@@ -28,6 +28,7 @@ import hrReportRoutes from './routes/hrReports.js';
 import auditRoutes from './routes/auditLog.js';
 import projectExportRoutes from './routes/projectExport.js';
 import delayRoutes, { sendDelayReminders } from './routes/delays.js';
+import holidayRoutes from './routes/holidays.js';
 
 dotenv.config();
 
@@ -66,6 +67,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/hr-reports', hrReportRoutes);
 app.use('/api/delays', delayRoutes);
 app.use('/api/audit', auditRoutes);
+app.use('/api/holidays', holidayRoutes);
 app.use('/api/project-export', projectExportRoutes);
 app.use('/api/finance', financeRoutes);
 

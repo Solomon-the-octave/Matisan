@@ -429,3 +429,14 @@ INSERT INTO departments (id, name, icon, description) VALUES
 ON CONFLICT (id) DO NOTHING;
 UPDATE departments SET name = 'Engineering' WHERE id = 'dept-eng' AND name = 'Engineering & Projects';
 UPDATE departments SET name = 'Finance' WHERE id = 'dept-finance' AND name = 'Finance & Procurement';
+
+-- Company holidays. `paid` is off by default, so adding a holiday changes
+-- nothing in payroll until an admin marks it paid (then every worker with
+-- attendance that week is credited one day for it, unless they worked it).
+CREATE TABLE IF NOT EXISTS holidays (
+  id          text PRIMARY KEY,
+  date        text NOT NULL UNIQUE,
+  name        text NOT NULL,
+  paid        boolean NOT NULL DEFAULT false,
+  "createdAt" timestamptz NOT NULL DEFAULT now()
+);

@@ -15,6 +15,7 @@ import Approvals from './pages/Approvals'
 import Finance from './pages/Finance'
 import AuditLog from './pages/AuditLog'
 import Voucher from './pages/Voucher'
+import Holidays from './pages/Holidays'
 import ProtectedRoute from './components/ProtectedRoute'
 
 export default function App() {
@@ -30,6 +31,7 @@ export default function App() {
       <Route path="/field-attendance" element={<ProtectedRoute><FieldAttendance /></ProtectedRoute>} />
       <Route path="/payroll-review" element={<ProtectedRoute roles={['admin', 'supervisor', 'finance']}><PayrollReview /></ProtectedRoute>} />
       <Route path="/finance" element={<ProtectedRoute><Finance /></ProtectedRoute>} />
+      <Route path="/holidays" element={<ProtectedRoute roles={['admin']}><Holidays /></ProtectedRoute>} />
       <Route path="/audit" element={<ProtectedRoute roles={['admin']}><AuditLog /></ProtectedRoute>} />
       <Route path="/voucher/:periodId" element={<ProtectedRoute><Voucher /></ProtectedRoute>} />
       <Route path="/approvals" element={<ProtectedRoute><Approvals /></ProtectedRoute>} />

@@ -292,13 +292,30 @@ export async function computePayroll(user, { projectId, from, to } = {}) {
   const records = await rows(`SELECT * FROM worker_attendance ${where}`, args);
 
   const byWorker = new Map();
+  const workedOn = new Map(); // workerId -> Set of dates with any paid time
   for (const r of records) {
+    if (dayValue(r) > 0) {
+      if (!workedOn.has(r.workerId)) workedOn.set(r.workerId, new Set());
+      workedOn.get(r.workerId).add(String(r.date).slice(0, 10));
+    }
     const prior = byWorker.get(r.workerId) || { days: 0, otHours: 0 };
     // Half a day for Morning, half for Afternoon — same as reading a paper
     // attendance card where AM and PM are marked separately.
     prior.days += dayValue(r);
     prior.otHours += r.otHours || 0;
     byWorker.set(r.workerId, prior);
+  }
+
+  // Paid holidays: a worker with attendance in this range is credited one day
+  // for each paid holiday they did not work (worked days already count).
+  // Holidays are unpaid by default, so nothing changes until an admin marks one.
+  if (from && to) {
+    const paidHolidays = await rows('SELECT date FROM holidays WHERE paid = true AND date >= $1 AND date <= $2', [from, to]);
+    for (const h of paidHolidays) {
+      for (const [workerId, agg] of byWorker) {
+        if (!workedOn.get(workerId)?.has(h.date)) agg.days += 1;
+      }
+    }
   }
 
   const workers = user.isGlobalAdmin || user.role === 'finance'
