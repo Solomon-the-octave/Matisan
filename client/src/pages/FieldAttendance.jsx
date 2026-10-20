@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
-import { UserPlus, Search, Camera, X, Users, Wallet, RefreshCw, Lock, Pencil, Download, Send, CheckCircle2, Undo2, Inbox } from 'lucide-react'
+import { UserPlus, Search, Camera, X, Users, Wallet, RefreshCw, Lock, Pencil, Download, Send, CheckCircle2, Undo2, Inbox, Printer } from 'lucide-react'
 import Badge from '../components/Badge'
 import Layout from '../components/Layout'
 import ScrollHint from '../components/ScrollHint'
@@ -99,6 +99,32 @@ function Avatar({ worker, size = 40 }) {
       style={{ width: size, height: size }}
     >
       {initials}
+    </div>
+  )
+}
+
+// Print layout (browser Print, then Save as PDF): a title block and the paper
+// form's signature boxes. Hidden on screen, shown only when printing.
+function SheetPrintHeader({ title, project, from, to }) {
+  return (
+    <div className="print-only mb-3 text-xs">
+      <div className="text-sm font-bold">{title}</div>
+      <div>Project: {project || '-'}{from ? ` · Week: ${from} to ${to}` : ''}</div>
+    </div>
+  )
+}
+
+function SignatureBlock() {
+  const boxes = ['Prepared by (Time Keeper)', 'Checked by (Foreman)', 'Approved by (Site Engineer)']
+  return (
+    <div className="print-only mt-8 grid grid-cols-3 gap-6 text-xs">
+      {boxes.map((b) => (
+        <div key={b}>
+          <div className="h-10 border-b border-black" />
+          <div className="mt-1 font-semibold">{b}</div>
+          <div>Name / Signature / Date</div>
+        </div>
+      ))}
     </div>
   )
 }
@@ -741,7 +767,8 @@ export default function FieldAttendance() {
 
       {tab === 'grid' && (
         <>
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <SheetPrintHeader title="Daily Labors Attendance Sheet" project={currentProject?.name} from={weekStart} to={weekEnd} />
+          <div className="no-print mb-3 flex flex-wrap items-center justify-between gap-2">
             <p className="text-sm text-slate-500">
               {weekStart} – {weekEnd} · tap a box to mark it, same as filling in the paper sheet by hand.
               {isEmployee && <span className="mt-0.5 block text-[11px] text-slate-400">Only today can be changed. Earlier days are locked; ask your supervisor to return the week if something needs correcting.</span>}
@@ -755,6 +782,13 @@ export default function FieldAttendance() {
               className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
             >
               <Download size={13} /> Download Weekly Sheet (CSV)
+            </button>
+            <button
+              onClick={() => window.print()}
+              disabled={!projectId}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+            >
+              <Printer size={13} /> Print / Save as PDF
             </button>
           </div>
           <ScrollHint>Swipe sideways to see the rest of the week</ScrollHint>
@@ -872,6 +906,7 @@ export default function FieldAttendance() {
               </tbody>
             </table>
           </div>
+          <SignatureBlock />
         </>
       )}
 
@@ -956,13 +991,21 @@ export default function FieldAttendance() {
 
       {tab === 'payroll' && payroll && (
         <>
-          <div className="mb-3 flex justify-end">
+          <SheetPrintHeader title="Daily Labors Payroll Sheet" project={currentProject?.name} from={weekStart} to={weekEnd} />
+          <div className="no-print mb-3 flex flex-wrap justify-end gap-2">
             <button
               onClick={() => downloadCsv({ projectId, type: 'payroll' }, `payroll-${projectId}.csv`)}
               disabled={!projectId}
               className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
             >
               <Download size={13} /> Download Payroll Report (CSV)
+            </button>
+            <button
+              onClick={() => window.print()}
+              disabled={!projectId}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
+            >
+              <Printer size={13} /> Print / Save as PDF
             </button>
           </div>
           <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -1048,6 +1091,7 @@ export default function FieldAttendance() {
               </tbody>
             </table>
           </div>
+          <SignatureBlock />
         </>
       )}
       </>
