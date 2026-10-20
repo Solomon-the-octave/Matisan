@@ -122,6 +122,11 @@ export default function ApprovalTrail({ periodId, onChange }) {
                   {s.current && s.status !== 'returned' && ' · current'}
                   {s.actedBy && ` · ${s.actedBy}, ${fmtDate(s.actedAt)}`}
                 </div>
+                {s.current && !s.assignee && (
+                  <div className="mt-1 rounded-md bg-amber-50 dark:bg-amber-500/10 px-2 py-1 text-xs text-amber-800 dark:text-amber-300">
+                    Nobody holds the {s.positionName} seat yet, so this week is waiting here. An admin can assign someone under Organization.
+                  </div>
+                )}
                 {s.status === 'returned' && (
                   <div className="mt-1 rounded-md bg-rose-50 dark:bg-rose-500/10 px-2 py-1 text-xs text-rose-700 dark:text-rose-300">
                     Returned by {s.returnedBy}: {s.comment}
