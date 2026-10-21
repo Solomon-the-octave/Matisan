@@ -96,7 +96,8 @@ export default function Users() {
   async function submit(e) {
     e.preventDefault()
     setError('')
-    if (needsProject && !form.projectId) { setError('Pick the project this position is on'); return }
+    // A new account may be created without a project; the seat is assigned later.
+    if (needsProject && editingId && !form.projectId) { setError('Pick the project this position is on'); return }
     setSaving(true)
     try {
       if (editingId) {
@@ -130,6 +131,8 @@ export default function Users() {
         } else if (projectId) {
           await api.put(`/projects/${projectId}/assignments`, { userId: newUser.id, action: 'add' })
           projectName = projects.find((p) => p.id === projectId)?.name || ''
+        } else if (pos) {
+          notes.push(`${pos.name} is not assigned to a project yet. Assign this person from the project's team when ready.`)
         }
       } catch (err) {
         notes.push(`The account was created, but the assignment failed: ${err.response?.data?.error || 'try again from the project team'}.`)
@@ -370,8 +373,8 @@ export default function Users() {
                 )}
                 {needsProject ? (
                   <Field label="Project">
-                    <select required value={form.projectId} onChange={(e) => setForm({ ...form, projectId: e.target.value })} className="input" disabled={!form.department}>
-                      <option value="">{form.department ? 'Select a project...' : 'Pick a department first'}</option>
+                    <select required={!!editingId} value={form.projectId} onChange={(e) => setForm({ ...form, projectId: e.target.value })} className="input" disabled={!form.department}>
+                      <option value="">{form.department ? (editingId ? 'Select a project...' : 'No project yet (assign later)') : 'Pick a department first'}</option>
                       {deptProjects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                   </Field>
